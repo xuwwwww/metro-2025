@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/draggable_icon_grid.dart';
-import '../widgets/add_icon_button.dart';
+import '../widgets/item_selector.dart';
 import '../models/app_item.dart';
 import 'detail_page.dart';
 
@@ -14,6 +14,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   static const int crossAxisCount = 4;
   List<AppItem> items = [];
+  bool isDragging = false;
 
   @override
   void initState() {
@@ -22,12 +23,7 @@ class _HomePageState extends State<HomePage> {
     final defaultItems = [
       AppItem(name: 'App1', icon: Icons.apps, color: Colors.teal, size: 1),
       AppItem(name: 'App2', icon: Icons.star, color: Colors.blue, size: 1),
-      AppItem(
-        name: 'Widget1',
-        icon: Icons.widgets,
-        color: Colors.orange,
-        size: 3,
-      ),
+      AppItem.clock(size: 3), // 使用時鐘 widget
       AppItem(name: 'App3', icon: Icons.home, color: Colors.purple, size: 1),
     ];
     int curRow = 0, curCol = 0;
@@ -45,7 +41,46 @@ class _HomePageState extends State<HomePage> {
 
   void _addItem(AppItem item) {
     setState(() {
-      items.add(item);
+      // 找到第一個可用的位置
+      int curRow = 0, curCol = 0;
+      bool placed = false;
+
+      while (!placed) {
+        // 檢查是否有足夠空間放置
+        if (curCol + item.size > crossAxisCount) {
+          curRow++;
+          curCol = 0;
+        }
+
+        // 檢查是否與現有項目重疊
+        bool canPlace = true;
+        for (final existingItem in items) {
+          for (int dx = 0; dx < item.size; dx++) {
+            for (int odx = 0; odx < existingItem.size; odx++) {
+              if (curRow == existingItem.row &&
+                  (curCol + dx) == (existingItem.col + odx)) {
+                canPlace = false;
+                break;
+              }
+            }
+            if (!canPlace) break;
+          }
+          if (!canPlace) break;
+        }
+
+        if (canPlace) {
+          item.row = curRow;
+          item.col = curCol;
+          items.add(item);
+          placed = true;
+        } else {
+          curCol++;
+          if (curCol >= crossAxisCount) {
+            curRow++;
+            curCol = 0;
+          }
+        }
+      }
     });
   }
 
@@ -88,50 +123,103 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  void _onDragStateChanged(bool dragging) {
+    setState(() {
+      isDragging = dragging;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  '主頁',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF26C6DA),
+    return Scaffold(
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        '主頁',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF26C6DA),
+                        ),
+                      ),
+                      ItemSelector(onAdd: (item) => _addItem(item)),
+                    ],
                   ),
-                ),
-                AddIconButton(onAdd: (item) => _addItem(item)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF22303C),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Color(0xFF114D4D), width: 2),
-                ),
-                padding: const EdgeInsets.all(12),
-                child: DraggableIconGrid(
-                  items: items,
-                  crossAxisCount: crossAxisCount,
-                  onTap: _openDetail,
-                  onRemove: _removeItem,
-                  onReorder: _onReorder,
-                  gridColor: const Color(0xFF114D4D),
-                  iconBgColor: const Color(0xFF1A2327),
-                ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF22303C),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: Color(0xFF114D4D), width: 2),
+                      ),
+                      padding: const EdgeInsets.all(12),
+                      child: DraggableIconGrid(
+                        items: items,
+                        crossAxisCount: crossAxisCount,
+                        onTap: _openDetail,
+                        onRemove: _removeItem,
+                        onReorder: _onReorder,
+                        onDragStateChanged: _onDragStateChanged,
+                        gridColor: const Color(0xFF114D4D),
+                        iconBgColor: const Color(0xFF1A2327),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+
+          // 移除區域（顯示在 navigation bar 之前）
+          if (isDragging)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: DragTarget<int>(
+                onAcceptWithDetails: (details) {
+                  final from = details.data;
+                  _removeItem(from);
+                },
+                builder: (context, candidateData, rejectedData) {
+                  return Container(
+                    height: 80, // navigation bar 高度
+                    decoration: BoxDecoration(
+                      color: candidateData.isNotEmpty
+                          ? Colors.red.withValues(alpha: 0.8)
+                          : Colors.red.withValues(alpha: 0.3),
+                      border: Border.all(
+                        color: candidateData.isNotEmpty
+                            ? Colors.red
+                            : Colors.red.withValues(alpha: 0.5),
+                        width: 2,
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '拖曳到此處移除',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
       ),
     );
   }
