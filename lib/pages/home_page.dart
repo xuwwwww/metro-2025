@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/draggable_icon_grid.dart';
 import '../widgets/item_selector.dart';
 import '../models/app_item.dart';
 import 'detail_page.dart';
+import 'chat_page.dart';
 
 class HomePage extends StatefulWidget {
   HomePage({Key? key}) : super(key: key);
@@ -22,7 +24,7 @@ class _HomePageState extends State<HomePage> {
     // 預設依序分配 row/col
     final defaultItems = [
       AppItem(name: 'App1', icon: Icons.apps, color: Colors.teal, size: 1),
-      AppItem(name: 'App2', icon: Icons.star, color: Colors.blue, size: 1),
+      AppItem(name: '聊天', icon: Icons.chat, color: Colors.green, size: 1),
       AppItem.clock(size: 3), // 使用時鐘 widget
       AppItem(name: 'App3', icon: Icons.home, color: Colors.purple, size: 1),
     ];
@@ -85,10 +87,18 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openDetail(AppItem item) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => DetailPage(item: item)),
-    );
+    // 如果是聊天圖標，打開聊天頁面
+    if (item.name == '聊天') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const ChatPage()),
+      );
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => DetailPage(item: item)),
+      );
+    }
   }
 
   void _removeItem(int index) {
@@ -129,6 +139,43 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // Firebase 測試函數
+  Future<void> _testFirebase() async {
+    try {
+      // 創建一個新的測試文檔
+      DocumentReference docRef = await FirebaseFirestore.instance
+          .collection('user_actions')
+          .add({
+            'action': 'button_pressed',
+            'timestamp': FieldValue.serverTimestamp(),
+            'user_id': 'test_user',
+            'page': 'home_page',
+          });
+
+      print('✅ Firebase 測試成功！文檔 ID: ${docRef.id}');
+
+      // 顯示成功訊息
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Firebase 測試成功！文檔 ID: ${docRef.id}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Firebase 測試失敗: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Firebase 測試失敗: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -151,7 +198,20 @@ class _HomePageState extends State<HomePage> {
                           color: Color(0xFF26C6DA),
                         ),
                       ),
-                      ItemSelector(onAdd: (item) => _addItem(item)),
+                      Row(
+                        children: [
+                          // Firebase 測試按鈕
+                          IconButton(
+                            onPressed: _testFirebase,
+                            icon: const Icon(
+                              Icons.cloud_upload,
+                              color: Color(0xFF26C6DA),
+                            ),
+                            tooltip: '測試 Firebase',
+                          ),
+                          ItemSelector(onAdd: (item) => _addItem(item)),
+                        ],
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),

@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "344201588559",
+    "project_id": "metrohackerthon",
+    "storage_bucket": "metrohackerthon.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:344201588559:android:bf9d057105c5f062009f3a",
+        "android_client_info": {
+          "package_name": "com.example.metro"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "344201588559-ksc9hcfbsttocun7ji6rs2jek1sppi53.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwWjYWN9L9tnwne3I9Xg3kf1whWkVMPVc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "344201588559-ksc9hcfbsttocun7ji6rs2jek1sppi53.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

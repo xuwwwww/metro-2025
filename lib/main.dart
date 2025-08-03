@@ -1,10 +1,53 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'pages/home_page.dart';
 import 'pages/others_page.dart';
 import 'pages/settings_page.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 過濾掉 Google Play Services 的錯誤訊息
+  FlutterError.onError = (FlutterErrorDetails details) {
+    if (!details.toString().contains('GoogleApiManager')) {
+      FlutterError.presentError(details);
+    }
+  };
+
+  await Firebase.initializeApp();
+
+  // 測試 Firebase Firestore 連接
+  await testFirestore();
+
   runApp(const MyApp());
+}
+
+// 測試 Firestore 的函數
+Future<void> testFirestore() async {
+  try {
+    // 創建一個測試文檔
+    await FirebaseFirestore.instance.collection('test').add({
+      'message': 'Hello from Metro App!',
+      'timestamp': FieldValue.serverTimestamp(),
+      'app_version': '0.0.1',
+    });
+
+    print('Firestore 測試成功！文檔已創建');
+
+    // 讀取剛才創建的文檔
+    QuerySnapshot snapshot = await FirebaseFirestore.instance
+        .collection('test')
+        .orderBy('timestamp', descending: true)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isNotEmpty) {
+      print('最新文檔: ${snapshot.docs.first.data()}');
+    }
+  } catch (e) {
+    print('Firestore 測試失敗: $e');
+  }
 }
 
 class MyApp extends StatelessWidget {
