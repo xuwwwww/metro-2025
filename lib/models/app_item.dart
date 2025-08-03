@@ -67,4 +67,66 @@ class AppItem {
       widgetType: 'battery',
     );
   }
+
+  // 轉換為 JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'iconCodePoint': icon.codePoint,
+      'iconFontFamily': icon.fontFamily,
+      'iconFontPackage': icon.fontPackage,
+      'colorValue': color.value,
+      'size': size,
+      'row': row,
+      'col': col,
+      'type': type.index,
+      'widgetType': widgetType,
+    };
+  }
+
+  // 從 JSON 創建 AppItem
+  factory AppItem.fromJson(Map<String, dynamic> json) {
+    final icon = IconData(
+      json['iconCodePoint'] as int,
+      fontFamily: json['iconFontFamily'] as String?,
+      fontPackage: json['iconFontPackage'] as String?,
+    );
+
+    final color = Color(json['colorValue'] as int);
+    final type = ItemType.values[json['type'] as int];
+
+    // 檢查是否為特殊 widget 類型
+    final widgetType = json['widgetType'] as String?;
+    if (widgetType == 'clock') {
+      return AppItem.clock(
+        size: json['size'] as int,
+        row: json['row'] as int,
+        col: json['col'] as int,
+      );
+    } else if (widgetType == 'weather') {
+      return AppItem.weather(
+        size: json['size'] as int,
+        row: json['row'] as int,
+        col: json['col'] as int,
+      );
+    } else if (widgetType == 'battery') {
+      return AppItem.battery(
+        size: json['size'] as int,
+        row: json['row'] as int,
+        col: json['col'] as int,
+      );
+    }
+
+    // 一般 AppItem
+    return AppItem(
+      name: json['name'] as String,
+      icon: icon,
+      color: color,
+      size: json['size'] as int,
+      row: json['row'] as int,
+      col: json['col'] as int,
+      type: type,
+      widgetType: widgetType,
+    );
+  }
 }

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../widgets/draggable_icon_grid.dart';
 import '../widgets/item_selector.dart';
 import '../models/app_item.dart';
 import 'detail_page.dart';
 import 'chat_page.dart';
+import 'settings_page.dart';
 
 class HomePage extends StatefulWidget {
   HomePage({Key? key}) : super(key: key);
@@ -17,11 +20,37 @@ class _HomePageState extends State<HomePage> {
   static const int crossAxisCount = 4;
   List<AppItem> items = [];
   bool isDragging = false;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   void initState() {
     super.initState();
-    // 預設依序分配 row/col
+    _loadSavedLayout();
+  }
+
+  // 載入保存的佈局
+  Future<void> _loadSavedLayout() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedLayout = prefs.getString('home_page_layout');
+
+      if (savedLayout != null) {
+        final List<dynamic> savedItems = jsonDecode(savedLayout);
+        setState(() {
+          items = savedItems.map((item) => AppItem.fromJson(item)).toList();
+        });
+      } else {
+        // 如果沒有保存的佈局，使用預設佈局
+        _loadDefaultLayout();
+      }
+    } catch (e) {
+      print('載入佈局失敗: $e');
+      _loadDefaultLayout();
+    }
+  }
+
+  // 載入預設佈局
+  void _loadDefaultLayout() {
     final defaultItems = [
       AppItem(name: 'App1', icon: Icons.apps, color: Colors.teal, size: 1),
       AppItem(name: '聊天', icon: Icons.chat, color: Colors.green, size: 1),
@@ -38,7 +67,22 @@ class _HomePageState extends State<HomePage> {
       item.col = curCol;
       curCol += item.size;
     }
-    items = defaultItems;
+    setState(() {
+      items = defaultItems;
+    });
+  }
+
+  // 保存佈局到本地存儲
+  Future<void> _saveLayout() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final layoutJson = jsonEncode(
+        items.map((item) => item.toJson()).toList(),
+      );
+      await prefs.setString('home_page_layout', layoutJson);
+    } catch (e) {
+      print('保存佈局失敗: $e');
+    }
   }
 
   void _addItem(AppItem item) {
@@ -84,15 +128,23 @@ class _HomePageState extends State<HomePage> {
         }
       }
     });
+    // 保存佈局
+    _saveLayout();
   }
 
   void _openDetail(AppItem item) {
     // 如果是聊天圖標，打開聊天頁面
     if (item.name == '聊天') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => const ChatPage()),
-      );
+      // 檢查用戶是否已登入
+      if (!GlobalLoginState.isLoggedIn) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('請先登入後再使用聊天功能')));
+        return;
+      }
+
+      // 顯示聊天室選擇對話框
+      _showRoomSelectionDialog();
     } else {
       Navigator.push(
         context,
@@ -101,10 +153,89 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // 顯示聊天室選擇對話框
+  void _showRoomSelectionDialog() async {
+    try {
+      // 獲取用戶有權限的聊天室
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(GlobalLoginState.currentUid)
+          .get();
+      final permissions = List<String>.from(
+        userDoc.data()?['permissions'] ?? [],
+      );
+
+      if (permissions.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('您還沒有加入任何聊天室，請先在設定中選擇聊天室')),
+        );
+        return;
+      }
+
+      // 顯示聊天室選擇對話框
+      final selectedRoom = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF22303C),
+          title: const Text(
+            '選擇聊天室',
+            style: TextStyle(color: Colors.white),
+            textAlign: TextAlign.center,
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: permissions.length,
+              itemBuilder: (context, index) {
+                final roomId = permissions[index];
+                return ListTile(
+                  title: Text(
+                    roomId,
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  onTap: () => Navigator.of(context).pop(roomId),
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消', style: TextStyle(color: Colors.grey)),
+            ),
+          ],
+        ),
+      );
+
+      if (selectedRoom != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatPage(
+              currentUid: GlobalLoginState.currentUid!,
+              roomId: selectedRoom,
+              profile: {
+                'displayName': GlobalLoginState.userName,
+                'avatarUrl': '',
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('載入聊天室失敗: $e')));
+    }
+  }
+
   void _removeItem(int index) {
     setState(() {
       items.removeAt(index);
     });
+    // 保存佈局
+    _saveLayout();
   }
 
   // from: index in items, to: gridIndex
@@ -131,49 +262,14 @@ class _HomePageState extends State<HomePage> {
       moving.row = row;
       moving.col = col;
     });
+    // 保存佈局
+    _saveLayout();
   }
 
   void _onDragStateChanged(bool dragging) {
     setState(() {
       isDragging = dragging;
     });
-  }
-
-  // Firebase 測試函數
-  Future<void> _testFirebase() async {
-    try {
-      // 創建一個新的測試文檔
-      DocumentReference docRef = await FirebaseFirestore.instance
-          .collection('user_actions')
-          .add({
-            'action': 'button_pressed',
-            'timestamp': FieldValue.serverTimestamp(),
-            'user_id': 'test_user',
-            'page': 'home_page',
-          });
-
-      print('✅ Firebase 測試成功！文檔 ID: ${docRef.id}');
-
-      // 顯示成功訊息
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Firebase 測試成功！文檔 ID: ${docRef.id}'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      print('❌ Firebase 測試失敗: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Firebase 測試失敗: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 
   @override
@@ -198,20 +294,7 @@ class _HomePageState extends State<HomePage> {
                           color: Color(0xFF26C6DA),
                         ),
                       ),
-                      Row(
-                        children: [
-                          // Firebase 測試按鈕
-                          IconButton(
-                            onPressed: _testFirebase,
-                            icon: const Icon(
-                              Icons.cloud_upload,
-                              color: Color(0xFF26C6DA),
-                            ),
-                            tooltip: '測試 Firebase',
-                          ),
-                          ItemSelector(onAdd: (item) => _addItem(item)),
-                        ],
-                      ),
+                      ItemSelector(onAdd: (item) => _addItem(item)),
                     ],
                   ),
                   const SizedBox(height: 12),

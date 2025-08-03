@@ -39,6 +39,9 @@ dependencies:
   # Firebase dependencies
   firebase_core: ^2.24.2
   cloud_firestore: ^4.14.0
+  
+  # Local storage
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:

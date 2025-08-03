@@ -1,101 +1,77 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatPage extends StatefulWidget {
-  const ChatPage({super.key});
+  final String currentUid;
+  final String roomId;
+  final Map<String, String> profile;
+
+  const ChatPage({
+    super.key,
+    required this.currentUid,
+    required this.roomId,
+    required this.profile,
+  });
 
   @override
   State<ChatPage> createState() => _ChatPageState();
 }
 
 class _ChatPageState extends State<ChatPage> {
-  final TextEditingController _messageController = TextEditingController();
-  final List<ChatMessage> _messages = [];
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  bool _isLoggedIn = false;
 
   @override
   void initState() {
     super.initState();
-    _loadFakeMessages();
-  }
-
-  void _loadFakeMessages() {
-    _messages.addAll([
-      ChatMessage(
-        text: '你好！歡迎使用 Metro App',
-        isMe: false,
-        timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-      ),
-      ChatMessage(
-        text: '謝謝！這個 app 很棒',
-        isMe: true,
-        timestamp: DateTime.now().subtract(const Duration(minutes: 4)),
-      ),
-      ChatMessage(
-        text: '有任何問題都可以問我',
-        isMe: false,
-        timestamp: DateTime.now().subtract(const Duration(minutes: 3)),
-      ),
-      ChatMessage(
-        text: '好的，我會的',
-        isMe: true,
-        timestamp: DateTime.now().subtract(const Duration(minutes: 2)),
-      ),
-    ]);
-  }
-
-  void _sendMessage() {
-    final messageText = _messageController.text.trim();
-    print('嘗試發送訊息: $messageText'); // 調試信息
-
-    if (messageText.isNotEmpty) {
-      setState(() {
-        _messages.add(
-          ChatMessage(text: messageText, isMe: true, timestamp: DateTime.now()),
+    // 自動滾動到底部
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
         );
-      });
-      print('訊息已添加到列表，總共 ${_messages.length} 條訊息'); // 調試信息
-      _messageController.clear();
+      }
+    });
+  }
 
-      // 滾動到最新消息
+  Future<void> _sendMessage() async {
+    final text = _msgController.text.trim();
+    if (text.isEmpty) return;
+
+    try {
+      await _firestore
+          .collection('chatRooms')
+          .doc(widget.roomId)
+          .collection('messages')
+          .add({
+            'senderUid': widget.currentUid,
+            'senderProfile': widget.profile,
+            'content': text,
+            'timestamp': FieldValue.serverTimestamp(),
+            // 若要 TTL 自動刪除，可加：
+            // 'expireAt': Timestamp.fromDate(
+            //    DateTime.now().add(const Duration(minutes: 10))
+            // )
+          });
+      _msgController.clear();
+
+      // 滾到最底部
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300),
+            _scrollController.position.maxScrollExtent + 100,
+            duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
           );
         }
       });
-
-      // 模擬自動回覆
-      Future.delayed(const Duration(seconds: 1), () {
-        if (mounted) {
-          setState(() {
-            _messages.add(
-              ChatMessage(
-                text: '收到你的訊息了！',
-                isMe: false,
-                timestamp: DateTime.now(),
-              ),
-            );
-          });
-          print('自動回覆已添加，總共 ${_messages.length} 條訊息'); // 調試信息
-
-          // 滾動到最新消息
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_scrollController.hasClients) {
-              _scrollController.animateTo(
-                _scrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-              );
-            }
-          });
-        }
-      });
-    } else {
-      print('訊息為空，無法發送'); // 調試信息
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('發送訊息失敗，請稍後再試')));
     }
   }
 
@@ -103,20 +79,147 @@ class _ChatPageState extends State<ChatPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('聊天室'),
+        title: Text('聊天室: ${widget.roomId}'),
         backgroundColor: const Color(0xFF114D4D),
         foregroundColor: Colors.white,
       ),
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(16),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final message = _messages[index];
-                return MessageBubble(message: message);
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _firestore
+                  .collection('chatRooms')
+                  .doc(widget.roomId)
+                  .collection('messages')
+                  .orderBy('timestamp')
+                  .snapshots(),
+              builder: (context, snap) {
+                if (snap.hasError) {
+                  return Center(
+                    child: Text(
+                      '載入訊息失敗: ${snap.error}',
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  );
+                }
+
+                if (!snap.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF26C6DA)),
+                  );
+                }
+
+                final docs = snap.data!.docs;
+
+                if (docs.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      '還沒有訊息，開始聊天吧！',
+                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    final doc = docs[index];
+                    final data = doc.data() as Map<String, dynamic>;
+                    final isMe = data['senderUid'] == widget.currentUid;
+                    final senderProfile =
+                        data['senderProfile'] as Map<String, dynamic>?;
+                    final displayName = senderProfile?['displayName'] ?? '未知用戶';
+                    final content = data['content'] as String? ?? '';
+                    final timestamp = data['timestamp'] as Timestamp?;
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        mainAxisAlignment: isMe
+                            ? MainAxisAlignment.end
+                            : MainAxisAlignment.start,
+                        children: [
+                          if (!isMe) ...[
+                            CircleAvatar(
+                              backgroundColor: const Color(0xFF26C6DA),
+                              child: Text(
+                                displayName.isNotEmpty ? displayName[0] : '?',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isMe
+                                    ? const Color(0xFF26C6DA)
+                                    : const Color(0xFF114D4D),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: isMe
+                                    ? CrossAxisAlignment.end
+                                    : CrossAxisAlignment.start,
+                                children: [
+                                  if (!isMe)
+                                    Text(
+                                      displayName,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.white70,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  if (!isMe) const SizedBox(height: 2),
+                                  Text(
+                                    content,
+                                    style: const TextStyle(color: Colors.white),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    timestamp != null
+                                        ? '${timestamp.toDate().toLocal().hour.toString().padLeft(2, '0')}:${timestamp.toDate().toLocal().minute.toString().padLeft(2, '0')}'
+                                        : '',
+                                    style: TextStyle(
+                                      color: Colors.grey[300],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (isMe) ...[
+                            const SizedBox(width: 8),
+                            CircleAvatar(
+                              backgroundColor: const Color(0xFF26C6DA),
+                              child: Text(
+                                widget.profile['displayName']?.isNotEmpty ==
+                                        true
+                                    ? widget.profile['displayName']![0]
+                                    : '我',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                );
               },
             ),
           ),
@@ -132,7 +235,7 @@ class _ChatPageState extends State<ChatPage> {
               children: [
                 Expanded(
                   child: TextField(
-                    controller: _messageController,
+                    controller: _msgController,
                     decoration: InputDecoration(
                       hintText: '輸入訊息...',
                       hintStyle: TextStyle(color: Colors.grey[400]),
@@ -146,8 +249,8 @@ class _ChatPageState extends State<ChatPage> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(25),
-                        borderSide: BorderSide(
-                          color: const Color(0xFF26C6DA),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF26C6DA),
                           width: 2,
                         ),
                       ),
@@ -181,91 +284,8 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
-    _messageController.dispose();
+    _msgController.dispose();
     _scrollController.dispose();
     super.dispose();
-  }
-}
-
-class ChatMessage {
-  final String text;
-  final bool isMe;
-  final DateTime timestamp;
-
-  ChatMessage({
-    required this.text,
-    required this.isMe,
-    required this.timestamp,
-  });
-}
-
-class MessageBubble extends StatelessWidget {
-  final ChatMessage message;
-
-  const MessageBubble({super.key, required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: message.isMe
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        children: [
-          if (!message.isMe) ...[
-            CircleAvatar(
-              backgroundColor: const Color(0xFF26C6DA),
-              child: Text(
-                'A',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: message.isMe
-                    ? const Color(0xFF26C6DA)
-                    : const Color(0xFF114D4D),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    message.text,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${message.timestamp.hour.toString().padLeft(2, '0')}:${message.timestamp.minute.toString().padLeft(2, '0')}',
-                    style: TextStyle(color: Colors.grey[300], fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (message.isMe) ...[
-            const SizedBox(width: 8),
-            CircleAvatar(
-              backgroundColor: const Color(0xFF26C6DA),
-              child: Text(
-                '我',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
   }
 }
