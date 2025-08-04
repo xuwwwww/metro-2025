@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -21,6 +22,7 @@ class _ChatPageState extends State<ChatPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final TextEditingController _msgController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  Timer? _purgeTimer;
 
   @override
   void initState() {
@@ -35,6 +37,40 @@ class _ChatPageState extends State<ChatPage> {
         );
       }
     });
+
+    // 初始化時清除過期訊息
+    _purgeExpiredMessages();
+
+    // 設定定時器，每10分鐘清除一次過期訊息
+    _purgeTimer = Timer.periodic(const Duration(minutes: 10), (timer) {
+      _purgeExpiredMessages();
+    });
+  }
+
+  Future<void> _purgeExpiredMessages() async {
+    try {
+      final now = Timestamp.now();
+      final snap = await _firestore
+          .collection('chatRooms')
+          .doc(widget.roomId)
+          .collection('messages')
+          .where('expireAt', isLessThanOrEqualTo: now)
+          .get();
+
+      if (snap.docs.isNotEmpty) {
+        final batch = _firestore.batch();
+        for (var doc in snap.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+
+        // 可選：顯示清除訊息數量（靜默處理）
+        print('已清除 ${snap.docs.length} 條過期訊息');
+      }
+    } catch (e) {
+      // 靜默處理錯誤，避免影響用戶體驗
+      print('清除過期訊息時發生錯誤: $e');
+    }
   }
 
   Future<void> _sendMessage() async {
@@ -51,10 +87,9 @@ class _ChatPageState extends State<ChatPage> {
             'senderProfile': widget.profile,
             'content': text,
             'timestamp': FieldValue.serverTimestamp(),
-            // 若要 TTL 自動刪除，可加：
-            // 'expireAt': Timestamp.fromDate(
-            //    DateTime.now().add(const Duration(minutes: 10))
-            // )
+            'expireAt': Timestamp.fromDate(
+              DateTime.now().add(const Duration(minutes: 10)),
+            ),
           });
       _msgController.clear();
 
@@ -69,9 +104,11 @@ class _ChatPageState extends State<ChatPage> {
         }
       });
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('發送訊息失敗，請稍後再試')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('發送訊息失敗，請稍後再試')));
+      }
     }
   }
 
@@ -284,6 +321,7 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    _purgeTimer?.cancel();
     _msgController.dispose();
     _scrollController.dispose();
     super.dispose();

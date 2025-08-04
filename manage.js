@@ -40,6 +40,11 @@ async function main() {
       console.log('ChatRooms:');
       snap.docs.forEach(doc => console.log(`  - ${doc.id}: ${doc.data().name}`));
     })
+    .command('list-room-ids', '查詢：列出所有聊天室 ID', {}, async () => {
+      const snap = await db.collection('chatRooms').get();
+      console.log('Room IDs:');
+      snap.docs.forEach(doc => console.log(`  - ${doc.id}`));
+    })
     .command('list-messages <roomId>', '查詢：列出某聊天室的 messages', yargs => {
       yargs.positional('roomId', { type: 'string', describe: '聊天室 ID' });
     }, async ({ roomId }) => {
@@ -50,6 +55,105 @@ async function main() {
         const d = doc.data();
         console.log(`  - ${doc.id}: ${d.content} (by ${d.senderUid})`);
       });
+    })
+    .command('get-room-data <roomId> [--save]', '查詢：獲取一個聊天室的所有資料', yargs => {
+      yargs.positional('roomId', { type: 'string', describe: '聊天室 ID' })
+           .option('save', { type: 'boolean', describe: '儲存成 JSON 檔案' });
+    }, async ({ roomId, save }) => {
+      try {
+        // 獲取聊天室基本資料
+        const roomDoc = await db.collection('chatRooms').doc(roomId).get();
+        if (!roomDoc.exists) {
+          console.error(`聊天室 ${roomId} 不存在`);
+          return;
+        }
+        
+        // 獲取成員資料
+        const membersSnap = await db.collection('chatRooms').doc(roomId).collection('members').get();
+        const members = {};
+        membersSnap.docs.forEach(doc => {
+          members[doc.id] = doc.data();
+        });
+        
+        // 獲取訊息資料
+        const messagesSnap = await db.collection('chatRooms').doc(roomId).collection('messages').orderBy('timestamp').get();
+        const messages = {};
+        messagesSnap.docs.forEach(doc => {
+          messages[doc.id] = doc.data();
+        });
+        
+        // 組合完整資料
+        const roomData = {
+          roomInfo: roomDoc.data(),
+          members: members,
+          messages: messages
+        };
+        
+        // 顯示資料
+        console.log(`\n=== 聊天室 ${roomId} 完整資料 ===`);
+        console.log('基本資訊:', JSON.stringify(roomData.roomInfo, null, 2));
+        console.log(`\n成員數量: ${Object.keys(roomData.members).length}`);
+        console.log('成員列表:', JSON.stringify(roomData.members, null, 2));
+        console.log(`\n訊息數量: ${Object.keys(roomData.messages).length}`);
+        console.log('訊息列表:', JSON.stringify(roomData.messages, null, 2));
+        
+        // 如果指定 --save，儲存成 JSON
+        if (save) {
+          const filename = `room_${roomId}_data.json`;
+          fs.writeFileSync(filename, JSON.stringify(roomData, null, 2));
+          console.log(`\n資料已儲存至: ${filename}`);
+        }
+      } catch (error) {
+        console.error('獲取聊天室資料時發生錯誤:', error);
+      }
+    })
+    .command('get-user-info <uid> [--save]', '查詢：獲取單一使用者全部資訊', yargs => {
+      yargs.positional('uid', { type: 'string', describe: '使用者 UID' })
+           .option('save', { type: 'boolean', describe: '儲存成 JSON 檔案' });
+    }, async ({ uid, save }) => {
+      try {
+        const userDoc = await db.collection('users').doc(uid).get();
+        if (!userDoc.exists) {
+          console.error(`使用者 ${uid} 不存在`);
+          return;
+        }
+        
+        const userData = userDoc.data();
+        
+        // 獲取使用者加入的所有聊天室
+        const userRooms = [];
+        for (const roomId of userData.permissions || []) {
+          const roomDoc = await db.collection('chatRooms').doc(roomId).get();
+          if (roomDoc.exists) {
+            userRooms.push({
+              roomId: roomId,
+              roomInfo: roomDoc.data()
+            });
+          }
+        }
+        
+        // 組合完整使用者資料
+        const completeUserData = {
+          uid: uid,
+          userInfo: userData,
+          joinedRooms: userRooms
+        };
+        
+        // 顯示資料
+        console.log(`\n=== 使用者 ${uid} 完整資訊 ===`);
+        console.log('基本資訊:', JSON.stringify(completeUserData.userInfo, null, 2));
+        console.log(`\n加入的聊天室數量: ${completeUserData.joinedRooms.length}`);
+        console.log('聊天室列表:', JSON.stringify(completeUserData.joinedRooms, null, 2));
+        
+        // 如果指定 --save，儲存成 JSON
+        if (save) {
+          const filename = `user_${uid}_data.json`;
+          fs.writeFileSync(filename, JSON.stringify(completeUserData, null, 2));
+          console.log(`\n資料已儲存至: ${filename}`);
+        }
+      } catch (error) {
+        console.error('獲取使用者資料時發生錯誤:', error);
+      }
     })
     .command('fetch-data', '查詢：匯出所有 users 與 chatRooms 成 JSON', {}, async () => {
       const usersSnap = await db.collection('users').get();
@@ -153,7 +257,7 @@ async function main() {
         const batch = db.batch();
         snap.docs.forEach(d => batch.delete(d.ref));
         await batch.commit();
-        console.log('清除 ${id} 訊息');
+        console.log(`清除 ${id} 訊息`);
       }
     })
 
@@ -180,6 +284,26 @@ async function main() {
       await db.collection('chatRooms').doc(roomId)
               .collection('members').doc(uid).delete();
       console.log('✔ ${uid} 的 ${roomId} 權限已移除');
+    })
+    .command('kick <uid> <roomId>', '修改：從聊天室移除使用者', yargs => {
+      yargs.positional('uid',{type:'string',describe:'使用者 UID'})
+           .positional('roomId',{type:'string',describe:'聊天室 ID'});
+    }, async ({ uid, roomId }) => {
+      if (uid === ADMIN_UID) {
+        console.error('無法移除 ADMIN 使用者');
+        return;
+      }
+      
+      // 從使用者的權限中移除聊天室
+      await db.collection('users').doc(uid).update({
+        permissions: admin.firestore.FieldValue.arrayRemove(roomId)
+      });
+      
+      // 從聊天室的成員中移除使用者
+      await db.collection('chatRooms').doc(roomId)
+              .collection('members').doc(uid).delete();
+      
+      console.log(`使用者 ${uid} 已從聊天室 ${roomId} 移除`);
     })
 
     .demandCommand(1,'請提供指令 (用 --help 查看完整列表)')
