@@ -378,39 +378,9 @@ rm -rf node_modules package-lock.json
 npm install
 ```
 
-## Performance Considerations
-
-### Current Optimizations
-- Firestore pagination for large message lists
-- Efficient JSON serialization for layout persistence
-- Minimal network requests with cached data
-- Optimized widget rebuilds
-
-### Future Improvements
-- Implement message pagination
-- Add offline support
-- Optimize image loading
-- Implement message search
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
 ## License
 
 This project is part of Metro Hackerthon 2025 Team 47.
 
-## Support
-
-For technical support or questions:
-- Check the troubleshooting section
-- Review Firebase documentation
-- Contact the development team
-
----
 
 **Metro App v0.0.1** - Built with Flutter and Firebase
