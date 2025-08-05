@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/version_check_wrapper.dart';
+import '../utils/version_checker.dart';
 
 // 全局登入狀態管理
 class GlobalLoginState {
@@ -391,13 +393,25 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ),
+            _buildSettingTile(
+              icon: Icons.system_update,
+              title: '檢查更新',
+              subtitle: '檢查應用程式是否有新版本',
+              onTap: () => VersionCheckWrapper.manualVersionCheck(context),
+            ),
 
             const SizedBox(height: 24),
-            Center(
-              child: Text(
-                '版本 0.0.1',
-                style: TextStyle(color: Colors.grey[400], fontSize: 12),
-              ),
+            FutureBuilder<String>(
+              future: VersionChecker().getLocalVersionString(),
+              builder: (context, snapshot) {
+                final version = snapshot.data ?? '載入中...';
+                return Center(
+                  child: Text(
+                    '版本 $version',
+                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 24), // 底部額外間距
           ],

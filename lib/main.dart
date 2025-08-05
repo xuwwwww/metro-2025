@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'pages/home_page.dart';
 import 'pages/others_page.dart';
 import 'pages/settings_page.dart';
+import 'utils/version_check_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,7 +16,7 @@ void main() async {
   };
 
   await Firebase.initializeApp();
-  
+
   // 初始化全局登入狀態
   await GlobalLoginState.initialize();
 
@@ -81,6 +82,15 @@ class _MainScaffoldState extends State<MainScaffold> {
     HomePage(),
     const SettingsPage(),
   ];
+
+  // 在應用啟動時檢查版本
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      VersionCheckWrapper.checkVersionOnStartup(context);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
