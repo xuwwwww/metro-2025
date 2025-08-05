@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../widgets/adaptive_text.dart';
 
 class ChatPage extends StatefulWidget {
   final String currentUid;
@@ -116,7 +117,7 @@ class _ChatPageState extends State<ChatPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('聊天室: ${widget.roomId}'),
+        title: AdaptiveBodyText('聊天室: ${widget.roomId}'),
         backgroundColor: const Color(0xFF114D4D),
         foregroundColor: Colors.white,
       ),
@@ -133,9 +134,9 @@ class _ChatPageState extends State<ChatPage> {
               builder: (context, snap) {
                 if (snap.hasError) {
                   return Center(
-                    child: Text(
+                    child: AdaptiveBodyText(
                       '載入訊息失敗: ${snap.error}',
-                      style: const TextStyle(color: Colors.red),
+                      color: Colors.red,
                     ),
                   );
                 }
@@ -150,10 +151,7 @@ class _ChatPageState extends State<ChatPage> {
 
                 if (docs.isEmpty) {
                   return const Center(
-                    child: Text(
-                      '還沒有訊息，開始聊天吧！',
-                      style: TextStyle(color: Colors.grey, fontSize: 16),
-                    ),
+                    child: AdaptiveBodyText('還沒有訊息，開始聊天吧！', color: Colors.grey),
                   );
                 }
 
@@ -181,12 +179,11 @@ class _ChatPageState extends State<ChatPage> {
                           if (!isMe) ...[
                             CircleAvatar(
                               backgroundColor: const Color(0xFF26C6DA),
-                              child: Text(
+                              child: AdaptiveText(
                                 displayName.isNotEmpty ? displayName[0] : '?',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                fontSizeMultiplier: 1.0,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -209,28 +206,21 @@ class _ChatPageState extends State<ChatPage> {
                                     : CrossAxisAlignment.start,
                                 children: [
                                   if (!isMe)
-                                    Text(
+                                    AdaptiveSmallText(
                                       displayName,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.white70,
-                                        fontWeight: FontWeight.w500,
-                                      ),
+                                      color: Colors.white70,
                                     ),
                                   if (!isMe) const SizedBox(height: 2),
-                                  Text(
+                                  AdaptiveBodyText(
                                     content,
-                                    style: const TextStyle(color: Colors.white),
+                                    color: Colors.white,
                                   ),
                                   const SizedBox(height: 4),
-                                  Text(
+                                  AdaptiveSmallText(
                                     timestamp != null
                                         ? '${timestamp.toDate().toLocal().hour.toString().padLeft(2, '0')}:${timestamp.toDate().toLocal().minute.toString().padLeft(2, '0')}'
                                         : '',
-                                    style: TextStyle(
-                                      color: Colors.grey[300],
-                                      fontSize: 12,
-                                    ),
+                                    color: Colors.grey[300],
                                   ),
                                 ],
                               ),
@@ -240,15 +230,14 @@ class _ChatPageState extends State<ChatPage> {
                             const SizedBox(width: 8),
                             CircleAvatar(
                               backgroundColor: const Color(0xFF26C6DA),
-                              child: Text(
+                              child: AdaptiveText(
                                 widget.profile['displayName']?.isNotEmpty ==
                                         true
                                     ? widget.profile['displayName']![0]
                                     : '我',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                fontSizeMultiplier: 1.0,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],

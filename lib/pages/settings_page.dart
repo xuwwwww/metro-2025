@@ -3,6 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/version_check_wrapper.dart';
 import '../utils/version_checker.dart';
+import '../utils/grid_config.dart';
+import '../utils/font_size_manager.dart';
+import '../widgets/adaptive_text.dart';
 
 // 全局登入狀態管理
 class GlobalLoginState {
@@ -93,7 +96,7 @@ class _SettingsPageState extends State<SettingsPage> {
   // App 設定
   bool _notificationsEnabled = true;
   bool _darkModeEnabled = true;
-  double _fontSize = 16.0;
+  double _fontSize = FontSizeManager.defaultFontSize;
 
   // 聊天室列表與選擇
   List<String> _allRooms = [];
@@ -109,6 +112,8 @@ class _SettingsPageState extends State<SettingsPage> {
     if (_isLoggedIn) {
       _loadUserPermissions();
     }
+    // 初始化字體大小管理器
+    _initializeFontSize();
   }
 
   // 從全局狀態載入登入狀態
@@ -118,6 +123,23 @@ class _SettingsPageState extends State<SettingsPage> {
       _currentUid = GlobalLoginState.currentUid;
       _isAdmin = GlobalLoginState.isAdmin;
       _userName = GlobalLoginState.userName;
+    });
+  }
+
+  // 初始化字體大小
+  Future<void> _initializeFontSize() async {
+    await FontSizeManager.initialize();
+    setState(() {
+      _fontSize = FontSizeManager.fontSize;
+    });
+    // 添加字體大小變更監聽器
+    FontSizeManager.addListener(_onFontSizeChanged);
+  }
+
+  // 字體大小變更回調
+  void _onFontSizeChanged(double newFontSize) {
+    setState(() {
+      _fontSize = newFontSize;
     });
   }
 
@@ -238,14 +260,7 @@ class _SettingsPageState extends State<SettingsPage> {
             Container(
               width: double.infinity,
               alignment: Alignment.center,
-              child: const Text(
-                '設定',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF26C6DA),
-                ),
-              ),
+              child: const AdaptiveTitle('設定'),
             ),
 
             const SizedBox(height: 24),
@@ -380,24 +395,49 @@ class _SettingsPageState extends State<SettingsPage> {
             _buildSettingTile(
               icon: Icons.text_fields,
               title: '字體大小',
-              subtitle: '調整應用程式字體大小',
+              subtitle:
+                  '${FontSizeManager.currentFontSizeDescription} (${_fontSize.toStringAsFixed(1)})',
               trailing: SizedBox(
                 width: 100,
                 child: Slider(
                   value: _fontSize,
-                  min: 12.0,
-                  max: 24.0,
+                  min: FontSizeManager.minFontSize,
+                  max: FontSizeManager.maxFontSize,
                   divisions: 6,
                   activeColor: const Color(0xFF26C6DA),
-                  onChanged: (v) => setState(() => _fontSize = v),
+                  onChanged: (v) async {
+                    await FontSizeManager.setFontSize(v);
+                  },
                 ),
               ),
             ),
+
+            const SizedBox(height: 24),
+            _buildSectionTitle('開發人員選項'),
+            const SizedBox(height: 12),
             _buildSettingTile(
-              icon: Icons.system_update,
-              title: '檢查更新',
-              subtitle: '檢查應用程式是否有新版本',
-              onTap: () => VersionCheckWrapper.manualVersionCheck(context),
+              icon: Icons.developer_mode,
+              title: '版本檢查',
+              subtitle: '檢查應用程式版本資訊',
+              onTap: () => _showVersionInfoDialog(context),
+            ),
+            _buildSettingTile(
+              icon: Icons.clear_all,
+              title: '清除本地資料',
+              subtitle: '清除所有本地保存的設定和佈局',
+              onTap: () => _showClearDataDialog(context),
+            ),
+            _buildSettingTile(
+              icon: Icons.refresh,
+              title: '重新載入配置',
+              subtitle: '重新載入網格配置設定',
+              onTap: () => _reloadGridConfig(context),
+            ),
+            _buildSettingTile(
+              icon: Icons.text_fields,
+              title: '重置字體大小',
+              subtitle: '重置為預設字體大小',
+              onTap: () => _resetFontSize(context),
             ),
 
             const SizedBox(height: 24),
@@ -405,12 +445,7 @@ class _SettingsPageState extends State<SettingsPage> {
               future: VersionChecker().getLocalVersionString(),
               builder: (context, snapshot) {
                 final version = snapshot.data ?? '載入中...';
-                return Center(
-                  child: Text(
-                    '版本 $version',
-                    style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                  ),
-                );
+                return Center(child: AdaptiveSmallText('版本 $version'));
               },
             ),
             const SizedBox(height: 24), // 底部額外間距
@@ -421,14 +456,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-        color: Color(0xFF114D4D),
-      ),
-    );
+    return AdaptiveSubtitle(title, color: const Color(0xFF114D4D));
   }
 
   Widget _buildSettingTile({
@@ -447,14 +475,13 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       child: ListTile(
         leading: Icon(icon, color: const Color(0xFF26C6DA)),
-        title: Text(
+        title: AdaptiveText(
           title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w500,
-          ),
+          fontSizeMultiplier: 1.0,
+          color: Colors.white,
+          fontWeight: FontWeight.w500,
         ),
-        subtitle: Text(subtitle, style: TextStyle(color: Colors.grey[400])),
+        subtitle: AdaptiveSmallText(subtitle),
         trailing: trailing,
         onTap: onTap,
       ),
@@ -778,5 +805,208 @@ class _SettingsPageState extends State<SettingsPage> {
       // 如果出錯，返回一個基於時間戳的 UID
       return DateTime.now().millisecondsSinceEpoch.toString();
     }
+  }
+
+  // 顯示版本資訊對話框
+  void _showVersionInfoDialog(BuildContext context) async {
+    final localVersion = await VersionChecker().getLocalVersionString();
+    final remoteVersion = await VersionChecker().getLatestVersionString();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22303C),
+        title: const Text(
+          '版本資訊',
+          style: TextStyle(color: Colors.white),
+          textAlign: TextAlign.center,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AdaptiveBodyText('本地版本: $localVersion'),
+            const SizedBox(height: 8),
+            AdaptiveBodyText('遠端版本: $remoteVersion'),
+            const SizedBox(height: 16),
+            AdaptiveSubtitle('網格配置:'),
+            const SizedBox(height: 8),
+            FutureBuilder<Map<String, dynamic>>(
+              future: _getGridConfigInfo(),
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  final config = snapshot.data!;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AdaptiveSmallText('格線大小: ${config['cellSize']}'),
+                      AdaptiveSmallText('格線間距: ${config['cellSpacing']}'),
+                      AdaptiveSmallText('欄位數量: ${config['crossAxisCount']}'),
+                      AdaptiveSmallText('時鐘寬度: ${config['clockWidth']}'),
+                      AdaptiveSmallText('天氣寬度: ${config['weatherWidth']}'),
+                    ],
+                  );
+                }
+                return const AdaptiveSmallText('載入中...');
+              },
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF26C6DA),
+            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('確定', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 獲取網格配置資訊
+  Future<Map<String, dynamic>> _getGridConfigInfo() async {
+    try {
+      return {
+        'cellSize': GridConfig.cellSize,
+        'cellSpacing': GridConfig.cellSpacing,
+        'crossAxisCount': GridConfig.defaultCrossAxisCount,
+        'clockWidth': GridConfig.getWidgetDimensions('clock')['width'],
+        'weatherWidth': GridConfig.getWidgetDimensions('weather')['width'],
+      };
+    } catch (e) {
+      return {
+        'cellSize': '載入失敗',
+        'cellSpacing': '載入失敗',
+        'crossAxisCount': '載入失敗',
+        'clockWidth': '載入失敗',
+        'weatherWidth': '載入失敗',
+      };
+    }
+  }
+
+  // 顯示清除資料對話框
+  void _showClearDataDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22303C),
+        title: const Text(
+          '清除本地資料',
+          style: TextStyle(color: Colors.white),
+          textAlign: TextAlign.center,
+        ),
+        content: const Text(
+          '這將會清除所有本地保存的設定、佈局和登入狀態。\n\n此操作無法復原，確定要繼續嗎？',
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              await _clearAllLocalData();
+              Navigator.pop(context);
+            },
+            child: const Text('清除', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 清除所有本地資料
+  Future<void> _clearAllLocalData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear(); // 清除所有 SharedPreferences 資料
+
+      // 重新初始化登入狀態
+      await GlobalLoginState.initialize();
+
+      // 重新載入狀態
+      _loadGlobalLoginState();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('本地資料已清除，請重新啟動應用程式'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('清除資料失敗: $e')));
+    }
+  }
+
+  // 重新載入網格配置
+  void _reloadGridConfig(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22303C),
+        title: const Text(
+          '重新載入配置',
+          style: TextStyle(color: Colors.white),
+          textAlign: TextAlign.center,
+        ),
+        content: const Text(
+          '網格配置已重新載入。\n\n請重新啟動應用程式以套用變更。',
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF26C6DA),
+            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('確定', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 重置字體大小
+  void _resetFontSize(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22303C),
+        title: const Text(
+          '重置字體大小',
+          style: TextStyle(color: Colors.white),
+          textAlign: TextAlign.center,
+        ),
+        content: const Text(
+          '確定要將字體大小重置為預設值嗎？',
+          style: TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF26C6DA),
+            ),
+            onPressed: () async {
+              await FontSizeManager.resetToDefault();
+              Navigator.pop(context);
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('字體大小已重置為預設值')));
+            },
+            child: const Text('重置', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 }

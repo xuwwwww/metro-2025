@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/app_item.dart';
+import '../widgets/adaptive_text.dart';
 
 class ItemSelector extends StatelessWidget {
   final Function(AppItem) onAdd;
@@ -40,25 +41,11 @@ class ItemSelector extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '新增項目',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
+              const AdaptiveTitle('新增項目'),
               const SizedBox(height: 20),
 
               // 應用程式區塊
-              const Text(
-                '應用程式',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF26C6DA),
-                ),
-              ),
+              const AdaptiveSubtitle('應用程式', color: Color(0xFF26C6DA)),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 12,
@@ -106,14 +93,7 @@ class ItemSelector extends StatelessWidget {
               const SizedBox(height: 24),
 
               // Widget 區塊
-              const Text(
-                'Widget',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF26C6DA),
-                ),
-              ),
+              const AdaptiveSubtitle('Widget', color: Color(0xFF26C6DA)),
               const SizedBox(height: 12),
               Wrap(
                 spacing: 12,
@@ -210,14 +190,7 @@ class ItemSelector extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 32),
             const SizedBox(height: 4),
-            Text(
-              name,
-              style: TextStyle(
-                fontSize: 12,
-                color: color,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            AdaptiveSmallText(name, color: color),
           ],
         ),
       ),
@@ -259,21 +232,8 @@ class ItemSelector extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 32),
             const SizedBox(height: 4),
-            Text(
-              name,
-              style: TextStyle(
-                fontSize: 12,
-                color: color,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            Text(
-              '${size}格',
-              style: TextStyle(
-                fontSize: 10,
-                color: color.withValues(alpha: 0.7),
-              ),
-            ),
+            AdaptiveSmallText(name, color: color),
+            AdaptiveSmallText('${size}格', color: color.withValues(alpha: 0.7)),
           ],
         ),
       ),

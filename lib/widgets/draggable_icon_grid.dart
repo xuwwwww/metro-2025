@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/app_item.dart';
+import '../utils/grid_config.dart';
+import '../utils/font_size_manager.dart';
+import '../widgets/adaptive_text.dart';
 import 'dynamic_widget.dart';
 
 typedef OnTap = void Function(AppItem item);
@@ -25,8 +28,8 @@ class DraggableIconGrid extends StatefulWidget {
     required this.onRemove,
     required this.onReorder,
     this.onDragStateChanged,
-    this.gridColor = const Color(0xFF114D4D),
-    this.iconBgColor = const Color(0xFF1A2327),
+    this.gridColor = GridConfig.defaultGridColor,
+    this.iconBgColor = GridConfig.defaultIconBgColor,
   });
 
   @override
@@ -42,8 +45,6 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
     int size = 1,
     required Color iconBgColor,
   }) {
-    const double cellSize = 72.0;
-    const double cellSpacing = 8.0;
     final Color bgColor = dragging
         ? item.color.withValues(alpha: 0.18)
         : iconBgColor;
@@ -55,16 +56,16 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
 
     // 一般應用程式
     return Container(
-      width: cellSize * size + cellSpacing * (size - 1),
-      height: cellSize,
+      width: GridConfig.cellSize * size + GridConfig.cellSpacing * (size - 1),
+      height: GridConfig.cellSize,
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(GridConfig.borderRadius),
         boxShadow: [
           BoxShadow(
-            color: Colors.black26,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: GridConfig.shadowColor,
+            blurRadius: GridConfig.shadowBlurRadius,
+            offset: GridConfig.shadowOffset,
           ),
         ],
       ),
@@ -75,11 +76,13 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(item.icon, color: item.color, size: 36),
-                const SizedBox(height: 8),
-                Text(
+                Icon(item.icon, color: item.color, size: GridConfig.iconSize),
+                SizedBox(height: GridConfig.iconTextSpacing),
+                AdaptiveText(
                   item.name,
-                  style: TextStyle(fontSize: 14, color: item.color),
+                  fontSizeMultiplier:
+                      GridConfig.iconTextSize / FontSizeManager.defaultFontSize,
+                  color: item.color,
                 ),
               ],
             ),
@@ -91,21 +94,15 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
 
   @override
   Widget build(BuildContext context) {
-    const double cellSize = 72.0;
-    const double cellSpacing = 8.0;
     final Size screenSize = MediaQuery.of(context).size;
-    final double availableHeight = screenSize.height - 220; // 預留上方標題與下方 bar
     final int colCount = widget.crossAxisCount;
 
     // 動態計算可容納的列數，確保不超出邊界
-    final int rowCount = (availableHeight / (cellSize + cellSpacing))
-        .floor()
-        .clamp(1, 10);
+    final int rowCount = GridConfig.calculateAvailableRows(screenSize.height);
     final int gridCount = colCount * rowCount;
 
     // 計算整個網格的總寬度
-    final double totalGridWidth =
-        colCount * cellSize + (colCount - 1) * cellSpacing;
+    final double totalGridWidth = GridConfig.calculateTotalGridWidth(colCount);
 
     // 計算左右邊距來實現置中
     // 使用 LayoutBuilder 來獲取實際可用寬度
@@ -117,7 +114,9 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
         return SingleChildScrollView(
           child: Container(
             width: availableWidth,
-            height: rowCount * (cellSize + cellSpacing) - cellSpacing,
+            height:
+                rowCount * (GridConfig.cellSize + GridConfig.cellSpacing) -
+                GridConfig.cellSpacing,
             child: Stack(
               children: [
                 // 背景網格
@@ -143,17 +142,21 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
                   }
 
                   return Positioned(
-                    left: horizontalPadding + col * (cellSize + cellSpacing),
-                    top: row * (cellSize + cellSpacing),
+                    left:
+                        horizontalPadding +
+                        col * (GridConfig.cellSize + GridConfig.cellSpacing),
+                    top: row * (GridConfig.cellSize + GridConfig.cellSpacing),
                     child: Container(
-                      width: cellSize,
-                      height: cellSize,
+                      width: GridConfig.cellSize,
+                      height: GridConfig.cellSize,
                       decoration: BoxDecoration(
                         border: Border.all(
                           color: widget.gridColor.withValues(alpha: 0.3),
-                          width: 2,
+                          width: GridConfig.borderWidth,
                         ),
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(
+                          GridConfig.gridBorderRadius,
+                        ),
                         color: Colors.transparent,
                       ),
                     ),
@@ -184,8 +187,12 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
 
                   return Positioned(
                     left:
-                        horizontalPadding + item.col * (cellSize + cellSpacing),
-                    top: item.row * (cellSize + cellSpacing),
+                        horizontalPadding +
+                        item.col *
+                            (GridConfig.cellSize + GridConfig.cellSpacing),
+                    top:
+                        item.row *
+                        (GridConfig.cellSize + GridConfig.cellSpacing),
                     child: DragTarget<int>(
                       onAcceptWithDetails: (details) {
                         final from = details.data;
@@ -201,9 +208,9 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
                       builder: (context, candidateData, rejectedData) {
                         return Container(
                           width:
-                              cellSize * item.size +
-                              cellSpacing * (item.size - 1),
-                          height: cellSize,
+                              GridConfig.cellSize * item.size +
+                              GridConfig.cellSpacing * (item.size - 1),
+                          height: GridConfig.cellSize,
                           decoration: BoxDecoration(
                             border: Border.all(
                               color: candidateData.isNotEmpty || isDragging
@@ -297,8 +304,10 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
                   }
 
                   return Positioned(
-                    left: horizontalPadding + col * (cellSize + cellSpacing),
-                    top: row * (cellSize + cellSpacing),
+                    left:
+                        horizontalPadding +
+                        col * (GridConfig.cellSize + GridConfig.cellSpacing),
+                    top: row * (GridConfig.cellSize + GridConfig.cellSpacing),
                     child: DragTarget<int>(
                       onAcceptWithDetails: (details) {
                         final from = details.data;
@@ -306,8 +315,8 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
                       },
                       builder: (context, candidateData, rejectedData) {
                         return Container(
-                          width: cellSize,
-                          height: cellSize,
+                          width: GridConfig.cellSize,
+                          height: GridConfig.cellSize,
                           decoration: BoxDecoration(
                             border: Border.all(
                               color: candidateData.isNotEmpty

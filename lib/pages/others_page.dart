@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/adaptive_text.dart';
 
 class OthersPage extends StatelessWidget {
   const OthersPage({super.key});
@@ -6,9 +7,7 @@ class OthersPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Center(
-        child: Text('其他分頁', style: TextStyle(fontSize: 22, color: Colors.teal)),
-      ),
+      child: Center(child: AdaptiveSubtitle('其他分頁', color: Colors.teal)),
     );
   }
 }

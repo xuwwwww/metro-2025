@@ -5,6 +5,8 @@ import 'dart:convert';
 import '../widgets/draggable_icon_grid.dart';
 import '../widgets/item_selector.dart';
 import '../models/app_item.dart';
+import '../utils/grid_config.dart';
+import '../widgets/adaptive_text.dart';
 import 'detail_page.dart';
 import 'chat_page.dart';
 import 'settings_page.dart';
@@ -17,7 +19,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  static const int crossAxisCount = 4;
+  static const int crossAxisCount = GridConfig.defaultCrossAxisCount;
   List<AppItem> items = [];
   bool isDragging = false;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -286,14 +288,7 @@ class _HomePageState extends State<HomePage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        '主頁',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF26C6DA),
-                        ),
-                      ),
+                      const AdaptiveTitle('主頁'),
                       ItemSelector(onAdd: (item) => _addItem(item)),
                     ],
                   ),
@@ -313,8 +308,8 @@ class _HomePageState extends State<HomePage> {
                         onRemove: _removeItem,
                         onReorder: _onReorder,
                         onDragStateChanged: _onDragStateChanged,
-                        gridColor: const Color(0xFF114D4D),
-                        iconBgColor: const Color(0xFF1A2327),
+                        gridColor: GridConfig.defaultGridColor,
+                        iconBgColor: GridConfig.defaultIconBgColor,
                       ),
                     ),
                   ),
@@ -349,13 +344,11 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     child: Center(
-                      child: Text(
+                      child: AdaptiveText(
                         '拖曳到此處移除',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        fontSizeMultiplier: 1.0,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   );

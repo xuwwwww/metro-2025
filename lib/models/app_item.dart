@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/grid_config.dart';
 
 enum ItemType {
   app, // 一般應用程式
@@ -27,12 +28,13 @@ class AppItem {
   });
 
   // 創建時鐘 widget 的工廠方法
-  factory AppItem.clock({int size = 3, int row = 0, int col = 0}) {
+  factory AppItem.clock({int? size, int row = 0, int col = 0}) {
+    final dimensions = GridConfig.getWidgetDimensions('clock');
     return AppItem(
       name: '時鐘',
       icon: Icons.access_time,
       color: Colors.orange,
-      size: size,
+      size: size ?? dimensions['width']!,
       row: row,
       col: col,
       type: ItemType.widget,
@@ -41,12 +43,13 @@ class AppItem {
   }
 
   // 創建天氣 widget 的工廠方法
-  factory AppItem.weather({int size = 2, int row = 0, int col = 0}) {
+  factory AppItem.weather({int? size, int row = 0, int col = 0}) {
+    final dimensions = GridConfig.getWidgetDimensions('weather');
     return AppItem(
       name: '天氣',
       icon: Icons.wb_sunny,
       color: Colors.blue,
-      size: size,
+      size: size ?? dimensions['width']!,
       row: row,
       col: col,
       type: ItemType.widget,
@@ -55,12 +58,13 @@ class AppItem {
   }
 
   // 創建電池 widget 的工廠方法
-  factory AppItem.battery({int size = 2, int row = 0, int col = 0}) {
+  factory AppItem.battery({int? size, int row = 0, int col = 0}) {
+    final dimensions = GridConfig.getWidgetDimensions('battery');
     return AppItem(
       name: '電池',
       icon: Icons.battery_full,
       color: Colors.green,
-      size: size,
+      size: size ?? dimensions['width']!,
       row: row,
       col: col,
       type: ItemType.widget,

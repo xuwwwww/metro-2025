@@ -4,6 +4,7 @@ import 'pages/home_page.dart';
 import 'pages/others_page.dart';
 import 'pages/settings_page.dart';
 import 'utils/version_check_wrapper.dart';
+import 'utils/font_size_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +20,9 @@ void main() async {
 
   // 初始化全局登入狀態
   await GlobalLoginState.initialize();
+
+  // 初始化字體大小管理器
+  await FontSizeManager.initialize();
 
   runApp(const MyApp());
 }
