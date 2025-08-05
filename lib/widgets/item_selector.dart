@@ -147,6 +147,14 @@ class ItemSelector extends StatelessWidget {
                     size: 2,
                     widgetType: 'alarm',
                   ),
+                  _buildWidgetItem(
+                    context: context,
+                    name: '捷運',
+                    icon: Icons.train,
+                    color: Colors.blue,
+                    size: 4,
+                    widgetType: 'mrt',
+                  ),
                 ],
               ),
 

@@ -28,6 +28,7 @@ class GridConfig {
     'clock': {'width': 4, 'height': 1},
     'weather': {'width': 2, 'height': 1},
     'battery': {'width': 2, 'height': 1},
+    'mrt': {'width': 4, 'height': 2},
     'default': {'width': 1, 'height': 1},
   };
 

@@ -39,6 +39,24 @@ class DraggableIconGrid extends StatefulWidget {
 class _DraggableIconGridState extends State<DraggableIconGrid> {
   bool isDragging = false;
 
+  double _calculateWidgetHeight(AppItem item) {
+    if (item.type == ItemType.widget && item.widgetType != null) {
+      final dimensions = GridConfig.getWidgetDimensions(item.widgetType!);
+      final int gridHeight = dimensions['height']!;
+      return GridConfig.cellSize * gridHeight +
+          GridConfig.cellSpacing * (gridHeight - 1);
+    }
+    return GridConfig.cellSize;
+  }
+
+  int _getWidgetGridHeight(AppItem item) {
+    if (item.type == ItemType.widget && item.widgetType != null) {
+      final dimensions = GridConfig.getWidgetDimensions(item.widgetType!);
+      return dimensions['height']!;
+    }
+    return 1;
+  }
+
   Widget _buildIcon(
     AppItem item, {
     bool dragging = false,
@@ -57,7 +75,7 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
     // 一般應用程式
     return Container(
       width: GridConfig.cellSize * size + GridConfig.cellSpacing * (size - 1),
-      height: GridConfig.cellSize,
+      height: _calculateWidgetHeight(item),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(GridConfig.borderRadius),
@@ -124,13 +142,14 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
                   final int row = index ~/ colCount;
                   final int col = index % colCount;
 
-                  // 檢查這個位置是否被多格 widget 覆蓋（非第一格）
+                  // 檢查這個位置是否被多格 widget 覆蓋
                   bool coveredByWidget = false;
                   for (final item in widget.items) {
-                    if (item.row == row &&
-                        col > item.col &&
-                        col < item.col + item.size &&
-                        item.size > 1) {
+                    if (item.size > 1 &&
+                        row >= item.row &&
+                        row < item.row + _getWidgetGridHeight(item) &&
+                        col >= item.col &&
+                        col < item.col + item.size) {
                       coveredByWidget = true;
                       break;
                     }
@@ -210,7 +229,7 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
                           width:
                               GridConfig.cellSize * item.size +
                               GridConfig.cellSpacing * (item.size - 1),
-                          height: GridConfig.cellSize,
+                          height: _calculateWidgetHeight(item),
                           decoration: BoxDecoration(
                             border: Border.all(
                               color: candidateData.isNotEmpty || isDragging
@@ -285,15 +304,16 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
                     }
                   }
 
-                  // 檢查這格是否被 widget 佔用（非第一格）
+                  // 檢查這格是否被 widget 佔用
                   bool occupied = false;
                   for (final item in widget.items) {
-                    if (item.row == row &&
+                    if (item.size > 1 &&
+                        row >= item.row &&
+                        row < item.row + _getWidgetGridHeight(item) &&
                         col >= item.col &&
                         col < item.col + item.size &&
-                        item.size > 1 &&
-                        row == item.row &&
-                        item.col != col) {
+                        // 排除圖示本身放置的第一格
+                        !(row == item.row && col == item.col)) {
                       occupied = true;
                       break;
                     }

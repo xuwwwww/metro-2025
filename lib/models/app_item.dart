@@ -72,6 +72,21 @@ class AppItem {
     );
   }
 
+  // 創建捷運 widget 的工廠方法
+  factory AppItem.mrt({int? size, int row = 0, int col = 0}) {
+    final dimensions = GridConfig.getWidgetDimensions('mrt');
+    return AppItem(
+      name: '捷運',
+      icon: Icons.train,
+      color: Colors.blue,
+      size: size ?? dimensions['width']!,
+      row: row,
+      col: col,
+      type: ItemType.widget,
+      widgetType: 'mrt',
+    );
+  }
+
   // 轉換為 JSON
   Map<String, dynamic> toJson() {
     return {
@@ -115,6 +130,12 @@ class AppItem {
       );
     } else if (widgetType == 'battery') {
       return AppItem.battery(
+        size: json['size'] as int,
+        row: json['row'] as int,
+        col: json['col'] as int,
+      );
+    } else if (widgetType == 'mrt') {
+      return AppItem.mrt(
         size: json['size'] as int,
         row: json['row'] as int,
         col: json['col'] as int,
