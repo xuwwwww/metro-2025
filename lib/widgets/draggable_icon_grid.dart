@@ -130,7 +130,7 @@ class _DraggableIconGridState extends State<DraggableIconGrid> {
         final double horizontalPadding = (availableWidth - totalGridWidth) / 2;
 
         return SingleChildScrollView(
-          child: Container(
+          child: SizedBox(
             width: availableWidth,
             height:
                 rowCount * (GridConfig.cellSize + GridConfig.cellSpacing) -

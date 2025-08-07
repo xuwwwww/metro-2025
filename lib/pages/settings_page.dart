@@ -102,6 +102,25 @@ class _SettingsPageState extends State<SettingsPage> {
   List<String> _allRooms = [];
   Set<String> _selectedRooms = {};
 
+  // 最新消息數據
+  List<Map<String, String>> _newsItems = [
+    {
+      'title': 'Family Mart x 台北捷運',
+      'content': 'Lorem ipsum dolor sit amrt consectetur adipiscing elit',
+      'image': 'assets/images/news1.jpg',
+    },
+    {
+      'title': 'Family Mart x 台北捷運',
+      'content': 'Lorem ipsum dolor sit amrt consectetur adipiscing elit',
+      'image': 'assets/images/news2.jpg',
+    },
+    {
+      'title': 'Family Mart x 台北捷',
+      'content': 'Lorem ipsum dolo consectetur adipiscing elit',
+      'image': 'assets/images/news3.jpg',
+    },
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -251,212 +270,307 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        children: [
+          // 頂部標題欄
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            color: const Color(0xFF22303C),
+            child: const Center(
+              child: Text(
+                '台北捷運',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+
+          // 頁面標題
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            color: const Color(0xFF2A3A4A),
+            child: const Center(
+              child: Text(
+                '會員資料',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+
+          // 主要內容區域
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 常用功能區塊
+                  _buildFrequentFunctionsSection(),
+
+                  const SizedBox(height: 24),
+
+                  // 開發者選項區塊
+                  _buildDeveloperOptionsSection(),
+
+                  const SizedBox(height: 24),
+
+                  // 最新消息區塊
+                  _buildLatestNewsSection(),
+
+                  const SizedBox(height: 24),
+
+                  // 版本資訊
+                  FutureBuilder<String>(
+                    future: VersionChecker().getLocalVersionString(),
+                    builder: (context, snapshot) {
+                      final version = snapshot.data ?? '載入中...';
+                      return Center(child: AdaptiveSmallText('版本 $version'));
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 常用功能區塊
+  Widget _buildFrequentFunctionsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // 頁首
-            Container(
-              width: double.infinity,
-              alignment: Alignment.center,
-              child: const AdaptiveTitle('設定'),
-            ),
-
-            const SizedBox(height: 24),
-            _buildSectionTitle('帳戶設定'),
-            const SizedBox(height: 12),
-            if (_isLoggedIn) ...[
-              _buildSettingTile(
-                icon: Icons.person,
-                title: '用戶: $_currentUid',
-                subtitle: _userName.isNotEmpty
-                    ? _userName
-                    : (_isAdmin ? '管理者' : '一般成員'),
-                onTap: () => _showNameEditDialog(context),
-              ),
-              _buildSettingTile(
-                icon: Icons.logout,
-                title: '登出',
-                subtitle: '登出當前帳戶',
-                onTap: () async {
-                  setState(() {
-                    _isLoggedIn = false;
-                    _currentUid = null;
-                    _isAdmin = false;
-                    _userName = '';
-                    _selectedRooms.clear();
-                  });
-                  // 更新靜態登入狀態
-                  await GlobalLoginState.clearLoginState();
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('已登出')));
-                },
-              ),
-            ] else ...[
-              _buildSettingTile(
-                icon: Icons.login,
-                title: '登入',
-                subtitle: '登入現有帳戶',
-                onTap: () => _showLoginDialog(context),
-              ),
-              _buildSettingTile(
-                icon: Icons.person_add,
-                title: '創立帳戶',
-                subtitle: '建立新帳戶',
-                onTap: () => _showCreateAccountDialog(context),
-              ),
-            ],
-
-            const SizedBox(height: 24),
-            if (_isLoggedIn) ...[
-              _buildSectionTitle('聊天室設定'),
-              const SizedBox(height: 12),
-              Container(
-                height: 200, // 固定高度確保可見性
-                child: ListView.builder(
-                  itemCount: _allRooms.length,
-                  itemBuilder: (context, index) {
-                    final roomId = _allRooms[index];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF22303C),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: const Color(0xFF114D4D),
-                          width: 1,
-                        ),
-                      ),
-                      child: CheckboxListTile(
-                        title: Text(
-                          roomId,
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                        value: _selectedRooms.contains(roomId),
-                        activeColor: const Color(0xFF26C6DA),
-                        onChanged: (v) {
-                          setState(() {
-                            if (v!)
-                              _selectedRooms.add(roomId);
-                            else
-                              _selectedRooms.remove(roomId);
-                          });
-                        },
-                        checkColor: Colors.white,
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _savePermissions,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF26C6DA),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: const Text(
-                    '儲存房間選擇',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-
-            // App 設定區塊（保留原有功能）
-            _buildSectionTitle('App 設定'),
-            const SizedBox(height: 12),
-            _buildSettingTile(
-              icon: Icons.notifications,
-              title: '通知',
-              subtitle: '開啟或關閉推播通知',
-              trailing: Switch(
-                value: _notificationsEnabled,
-                onChanged: (v) => setState(() => _notificationsEnabled = v),
-                activeColor: const Color(0xFF26C6DA),
+            const Text(
+              '常用功能',
+              style: TextStyle(
+                color: Color(0xFF114D4D),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
               ),
             ),
-            _buildSettingTile(
-              icon: Icons.dark_mode,
-              title: '深色模式',
-              subtitle: '使用深色主題',
-              trailing: Switch(
-                value: _darkModeEnabled,
-                onChanged: (v) => setState(() => _darkModeEnabled = v),
-                activeColor: const Color(0xFF26C6DA),
-              ),
-            ),
-            _buildSettingTile(
-              icon: Icons.text_fields,
-              title: '字體大小',
-              subtitle:
-                  '${FontSizeManager.currentFontSizeDescription} (${_fontSize.toStringAsFixed(1)})',
-              trailing: SizedBox(
-                width: 100,
-                child: Slider(
-                  value: _fontSize,
-                  min: FontSizeManager.minFontSize,
-                  max: FontSizeManager.maxFontSize,
-                  divisions: 6,
-                  activeColor: const Color(0xFF26C6DA),
-                  onChanged: (v) async {
-                    await FontSizeManager.setFontSize(v);
-                  },
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-            _buildSectionTitle('開發人員選項'),
-            const SizedBox(height: 12),
-            _buildSettingTile(
-              icon: Icons.developer_mode,
-              title: '版本檢查',
-              subtitle: '檢查應用程式版本資訊',
-              onTap: () => _showVersionInfoDialog(context),
-            ),
-            _buildSettingTile(
-              icon: Icons.clear_all,
-              title: '清除本地資料',
-              subtitle: '清除所有本地保存的設定和佈局',
-              onTap: () => _showClearDataDialog(context),
-            ),
-            _buildSettingTile(
-              icon: Icons.refresh,
-              title: '重新載入配置',
-              subtitle: '重新載入網格配置設定',
-              onTap: () => _reloadGridConfig(context),
-            ),
-            _buildSettingTile(
-              icon: Icons.text_fields,
-              title: '重置字體大小',
-              subtitle: '重置為預設字體大小',
-              onTap: () => _resetFontSize(context),
-            ),
-
-            const SizedBox(height: 24),
-            FutureBuilder<String>(
-              future: VersionChecker().getLocalVersionString(),
-              builder: (context, snapshot) {
-                final version = snapshot.data ?? '載入中...';
-                return Center(child: AdaptiveSmallText('版本 $version'));
+            TextButton(
+              onPressed: () {
+                // 編輯功能
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('編輯功能')));
               },
+              child: const Text(
+                '編輯',
+                style: TextStyle(color: Color(0xFF26C6DA), fontSize: 14),
+              ),
             ),
-            const SizedBox(height: 24), // 底部額外間距
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // 功能按鈕網格
+        Row(
+          children: [
+            Expanded(
+              child: _buildFunctionButton(
+                icon: Icons.person,
+                label: '帳戶',
+                onTap: () => _showAccountDialog(),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildFunctionButton(
+                icon: Icons.notifications,
+                label: '通知',
+                onTap: () => _showNotificationSettings(),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildFunctionButton(
+                icon: Icons.dark_mode,
+                label: '主題',
+                onTap: () => _showThemeSettings(),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildFunctionButton(
+                icon: Icons.text_fields,
+                label: '字體',
+                onTap: () => _showFontSettings(),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // 功能按鈕
+  Widget _buildFunctionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 80,
+        decoration: BoxDecoration(
+          color: const Color(0xFF22303C),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF114D4D), width: 1),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: const Color(0xFF26C6DA), size: 24),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSectionTitle(String title) {
-    return AdaptiveSubtitle(title, color: const Color(0xFF114D4D));
+  // 開發者選項區塊
+  Widget _buildDeveloperOptionsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '開發人員選項',
+          style: TextStyle(
+            color: Color(0xFF114D4D),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        _buildSettingTile(
+          icon: Icons.developer_mode,
+          title: '版本檢查',
+          subtitle: '檢查應用程式版本資訊',
+          onTap: () => _showVersionInfoDialog(context),
+        ),
+        _buildSettingTile(
+          icon: Icons.clear_all,
+          title: '清除本地資料',
+          subtitle: '清除所有本地保存的設定和佈局',
+          onTap: () => _showClearDataDialog(context),
+        ),
+        _buildSettingTile(
+          icon: Icons.refresh,
+          title: '重新載入配置',
+          subtitle: '重新載入網格配置設定',
+          onTap: () => _reloadGridConfig(context),
+        ),
+        _buildSettingTile(
+          icon: Icons.text_fields,
+          title: '重置字體大小',
+          subtitle: '重置為預設字體大小',
+          onTap: () => _resetFontSize(context),
+        ),
+      ],
+    );
+  }
+
+  // 最新消息區塊
+  Widget _buildLatestNewsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '最新消息',
+          style: TextStyle(
+            color: Color(0xFF114D4D),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        SizedBox(
+          height: 210,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _newsItems.length,
+            itemBuilder: (context, index) {
+              final news = _newsItems[index];
+              return Container(
+                width: 280,
+                margin: const EdgeInsets.only(right: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22303C),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF114D4D), width: 1),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 圖片佔位符
+                    Container(
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3A4A5A),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
+                        ),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.image, color: Colors.grey, size: 40),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            news['title']!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            news['content']!,
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 12,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildSettingTile({
@@ -484,6 +598,227 @@ class _SettingsPageState extends State<SettingsPage> {
         subtitle: AdaptiveSmallText(subtitle),
         trailing: trailing,
         onTap: onTap,
+      ),
+    );
+  }
+
+  // 帳戶對話框
+  void _showAccountDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22303C),
+        title: const Text(
+          '帳戶設定',
+          style: TextStyle(color: Colors.white),
+          textAlign: TextAlign.center,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_isLoggedIn) ...[
+              ListTile(
+                leading: const Icon(Icons.person, color: Color(0xFF26C6DA)),
+                title: const Text(
+                  '用戶資訊',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  'UID: $_currentUid\n名稱: $_userName',
+                  style: const TextStyle(color: Colors.grey),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showNameEditDialog(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.logout, color: Color(0xFF26C6DA)),
+                title: const Text('登出', style: TextStyle(color: Colors.white)),
+                onTap: () async {
+                  setState(() {
+                    _isLoggedIn = false;
+                    _currentUid = null;
+                    _isAdmin = false;
+                    _userName = '';
+                    _selectedRooms.clear();
+                  });
+                  await GlobalLoginState.clearLoginState();
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('已登出')));
+                },
+              ),
+            ] else ...[
+              ListTile(
+                leading: const Icon(Icons.login, color: Color(0xFF26C6DA)),
+                title: const Text('登入', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showLoginDialog(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.person_add, color: Color(0xFF26C6DA)),
+                title: const Text(
+                  '創立帳戶',
+                  style: TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showCreateAccountDialog(context);
+                },
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('關閉', style: TextStyle(color: Colors.grey)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 通知設定對話框
+  void _showNotificationSettings() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22303C),
+        title: const Text(
+          '通知設定',
+          style: TextStyle(color: Colors.white),
+          textAlign: TextAlign.center,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SwitchListTile(
+              title: const Text('推播通知', style: TextStyle(color: Colors.white)),
+              subtitle: const Text(
+                '開啟或關閉推播通知',
+                style: TextStyle(color: Colors.grey),
+              ),
+              value: _notificationsEnabled,
+              onChanged: (value) {
+                setState(() {
+                  _notificationsEnabled = value;
+                });
+              },
+              activeColor: const Color(0xFF26C6DA),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('確定', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 主題設定對話框
+  void _showThemeSettings() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22303C),
+        title: const Text(
+          '主題設定',
+          style: TextStyle(color: Colors.white),
+          textAlign: TextAlign.center,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SwitchListTile(
+              title: const Text('深色模式', style: TextStyle(color: Colors.white)),
+              subtitle: const Text(
+                '使用深色主題',
+                style: TextStyle(color: Colors.grey),
+              ),
+              value: _darkModeEnabled,
+              onChanged: (value) {
+                setState(() {
+                  _darkModeEnabled = value;
+                });
+              },
+              activeColor: const Color(0xFF26C6DA),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('確定', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 字體設定對話框
+  void _showFontSettings() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22303C),
+        title: const Text(
+          '字體大小設定',
+          style: TextStyle(color: Colors.white),
+          textAlign: TextAlign.center,
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${FontSizeManager.currentFontSizeDescription} (${_fontSize.toStringAsFixed(1)})',
+              style: const TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            StatefulBuilder(
+              builder: (context, setDialogState) {
+                return Column(
+                  children: [
+                    Slider(
+                      value: _fontSize,
+                      min: FontSizeManager.minFontSize,
+                      max: FontSizeManager.maxFontSize,
+                      divisions: 6,
+                      activeColor: const Color(0xFF26C6DA),
+                      onChanged: (value) async {
+                        setDialogState(() {
+                          _fontSize = value;
+                        });
+                        await FontSizeManager.setFontSize(value);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('小', style: TextStyle(color: Colors.grey)),
+                        const Text('大', style: TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('確定', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
