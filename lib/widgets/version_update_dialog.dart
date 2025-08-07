@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class VersionUpdateDialog extends StatelessWidget {
   final String currentVersion;
   final String latestVersion;
+  final String? diaryText;
   final bool isForceUpdate;
   final bool isPatchUpdate;
 
@@ -10,6 +11,7 @@ class VersionUpdateDialog extends StatelessWidget {
     super.key,
     required this.currentVersion,
     required this.latestVersion,
+    this.diaryText,
     this.isForceUpdate = false,
     this.isPatchUpdate = false,
   });
@@ -86,6 +88,45 @@ class VersionUpdateDialog extends StatelessWidget {
               ],
             ),
           ),
+          if (diaryText != null && diaryText!.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A2327),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFF26C6DA), width: 1),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.book, color: Color(0xFF26C6DA), size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        '更新日誌',
+                        style: TextStyle(
+                          color: Color(0xFF26C6DA),
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    diaryText!,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
       actions: [

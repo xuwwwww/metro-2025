@@ -9,6 +9,7 @@ class VersionChecker {
   static const String _configCollection = 'config';
   static const String _appDocId = 'app';
   static const String _latestVersionField = 'latestVersion';
+  static const String _diaryField = 'diary';
   static const String _remoteConfigKey = 'latest_version';
 
   /// 獲取本地版本
@@ -39,6 +40,30 @@ class VersionChecker {
     } catch (e) {
       debugPrint('從 Firestore 獲取版本失敗: $e');
       rethrow;
+    }
+  }
+
+  /// 從 Firestore 獲取日誌文字
+  Future<String> getDiaryText() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection(_configCollection)
+          .doc(_appDocId)
+          .get();
+      
+      if (!doc.exists) {
+        return '日誌載入失敗';
+      }
+      
+      final data = doc.data();
+      if (data == null || !data.containsKey(_diaryField)) {
+        return '日誌內容不存在';
+      }
+      
+      return data[_diaryField] as String? ?? '日誌內容為空';
+    } catch (e) {
+      debugPrint('從 Firestore 獲取日誌失敗: $e');
+      return '日誌載入失敗: $e';
     }
   }
 

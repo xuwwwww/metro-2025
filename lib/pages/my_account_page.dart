@@ -5,86 +5,17 @@ import '../utils/version_check_wrapper.dart';
 import '../utils/version_checker.dart';
 import '../utils/grid_config.dart';
 import '../utils/font_size_manager.dart';
+import '../utils/global_login_state.dart';
 import '../widgets/adaptive_text.dart';
 
-// 全局登入狀態管理
-class GlobalLoginState {
-  static bool _isLoggedIn = false;
-  static String? _currentUid;
-  static bool _isAdmin = false;
-  static String _userName = '';
-
-  // 初始化 - 從本地存儲載入登入狀態
-  static Future<void> initialize() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      _isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-      _currentUid = prefs.getString('currentUid');
-      _isAdmin = prefs.getBool('isAdmin') ?? false;
-      _userName = prefs.getString('userName') ?? '';
-    } catch (e) {
-      print('載入登入狀態失敗: $e');
-    }
-  }
-
-  // 設置登入狀態
-  static Future<void> setLoginState({
-    required bool isLoggedIn,
-    String? uid,
-    bool isAdmin = false,
-    String userName = '',
-  }) async {
-    _isLoggedIn = isLoggedIn;
-    _currentUid = uid;
-    _isAdmin = isAdmin;
-    _userName = userName;
-
-    // 保存到本地存儲
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isLoggedIn', isLoggedIn);
-      await prefs.setString('currentUid', uid ?? '');
-      await prefs.setBool('isAdmin', isAdmin);
-      await prefs.setString('userName', userName);
-    } catch (e) {
-      print('保存登入狀態失敗: $e');
-    }
-  }
-
-  // 清除登入狀態
-  static Future<void> clearLoginState() async {
-    _isLoggedIn = false;
-    _currentUid = null;
-    _isAdmin = false;
-    _userName = '';
-
-    // 清除本地存儲
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('isLoggedIn');
-      await prefs.remove('currentUid');
-      await prefs.remove('isAdmin');
-      await prefs.remove('userName');
-    } catch (e) {
-      print('清除登入狀態失敗: $e');
-    }
-  }
-
-  // 獲取登入狀態
-  static bool get isLoggedIn => _isLoggedIn;
-  static String? get currentUid => _currentUid;
-  static bool get isAdmin => _isAdmin;
-  static String get userName => _userName;
-}
-
-class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+class MyAccountPage extends StatefulWidget {
+  const MyAccountPage({super.key});
 
   @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  State<MyAccountPage> createState() => _MyAccountPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _MyAccountPageState extends State<MyAccountPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // 登入與使用者狀態
@@ -102,24 +33,7 @@ class _SettingsPageState extends State<SettingsPage> {
   List<String> _allRooms = [];
   Set<String> _selectedRooms = {};
 
-  // 最新消息數據
-  List<Map<String, String>> _newsItems = [
-    {
-      'title': 'Family Mart x 台北捷運',
-      'content': 'Lorem ipsum dolor sit amrt consectetur adipiscing elit',
-      'image': 'assets/images/news1.jpg',
-    },
-    {
-      'title': 'Family Mart x 台北捷運',
-      'content': 'Lorem ipsum dolor sit amrt consectetur adipiscing elit',
-      'image': 'assets/images/news2.jpg',
-    },
-    {
-      'title': 'Family Mart x 台北捷',
-      'content': 'Lorem ipsum dolo consectetur adipiscing elit',
-      'image': 'assets/images/news3.jpg',
-    },
-  ];
+  // 移除最新消息數據
 
   @override
   void initState() {
@@ -205,68 +119,6 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  // 儲存並同步聊天室權限
-  Future<void> _savePermissions() async {
-    final uid = _currentUid!;
-    try {
-      // 更新 users/{uid}.permissions
-      await _firestore.collection('users').doc(uid).set({
-        'permissions': _selectedRooms.toList(),
-      }, SetOptions(merge: true));
-
-      // 同步 chatRooms/{room}/members
-      final batch = _firestore.batch();
-      for (var roomId in _allRooms) {
-        final memberRef = _firestore
-            .collection('chatRooms')
-            .doc(roomId)
-            .collection('members')
-            .doc(uid);
-        if (_selectedRooms.contains(roomId)) {
-          batch.set(memberRef, {'joinedAt': FieldValue.serverTimestamp()});
-        } else {
-          batch.delete(memberRef);
-        }
-      }
-      await batch.commit();
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('聊天室權限已更新')));
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('儲存失敗，請稍後再試')));
-    }
-  }
-
-  // 更新用戶名稱
-  Future<void> _updateUserName(String newName) async {
-    if (_currentUid == null) return;
-    try {
-      await _firestore.collection('users').doc(_currentUid).update({
-        'displayName': newName,
-      });
-      setState(() {
-        _userName = newName;
-      });
-      // 更新靜態變數
-      await GlobalLoginState.setLoginState(
-        isLoggedIn: _isLoggedIn,
-        uid: _currentUid,
-        isAdmin: _isAdmin,
-        userName: _userName,
-      );
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('名稱已更新')));
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('更新失敗，請稍後再試')));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -296,7 +148,7 @@ class _SettingsPageState extends State<SettingsPage> {
             color: const Color(0xFF2A3A4A),
             child: const Center(
               child: Text(
-                '會員資料',
+                '我的帳戶',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -320,11 +172,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
                   // 開發者選項區塊
                   _buildDeveloperOptionsSection(),
-
-                  const SizedBox(height: 24),
-
-                  // 最新消息區塊
-                  _buildLatestNewsSection(),
 
                   const SizedBox(height: 24),
 
@@ -490,88 +337,7 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // 最新消息區塊
-  Widget _buildLatestNewsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '最新消息',
-          style: TextStyle(
-            color: Color(0xFF114D4D),
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
 
-        SizedBox(
-          height: 210,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: _newsItems.length,
-            itemBuilder: (context, index) {
-              final news = _newsItems[index];
-              return Container(
-                width: 280,
-                margin: const EdgeInsets.only(right: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF22303C),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF114D4D), width: 1),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 圖片佔位符
-                    Container(
-                      height: 120,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF3A4A5A),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(12),
-                          topRight: Radius.circular(12),
-                        ),
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.image, color: Colors.grey, size: 40),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            news['title']!,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            news['content']!,
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 12,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
 
   Widget _buildSettingTile({
     required IconData icon,
@@ -1139,6 +905,33 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (e) {
       // 如果出錯，返回一個基於時間戳的 UID
       return DateTime.now().millisecondsSinceEpoch.toString();
+    }
+  }
+
+  // 更新用戶名稱
+  Future<void> _updateUserName(String newName) async {
+    if (_currentUid == null) return;
+    try {
+      await _firestore.collection('users').doc(_currentUid).update({
+        'displayName': newName,
+      });
+      setState(() {
+        _userName = newName;
+      });
+      // 更新靜態變數
+      await GlobalLoginState.setLoginState(
+        isLoggedIn: _isLoggedIn,
+        uid: _currentUid,
+        isAdmin: _isAdmin,
+        userName: _userName,
+      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('名稱已更新')));
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('更新失敗，請稍後再試')));
     }
   }
 

@@ -47,6 +47,7 @@ class VersionCheckWrapper {
   ) async {
     final currentVersion = await checker.getLocalVersionString();
     final latestVersion = await checker.getLatestVersionString();
+    final diaryText = await checker.getDiaryText();
 
     if (!context.mounted) return;
 
@@ -56,6 +57,7 @@ class VersionCheckWrapper {
       builder: (context) => VersionUpdateDialog(
         currentVersion: currentVersion,
         latestVersion: latestVersion,
+        diaryText: diaryText,
         isForceUpdate: true,
       ),
     );
@@ -78,6 +80,7 @@ class VersionCheckWrapper {
   ) async {
     final currentVersion = await checker.getLocalVersionString();
     final latestVersion = await checker.getLatestVersionString();
+    final diaryText = await checker.getDiaryText();
 
     if (!context.mounted) return;
 
@@ -87,6 +90,7 @@ class VersionCheckWrapper {
       builder: (context) => VersionUpdateDialog(
         currentVersion: currentVersion,
         latestVersion: latestVersion,
+        diaryText: diaryText,
         isForceUpdate: false,
         isPatchUpdate: true,
       ),

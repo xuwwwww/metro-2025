@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'pages/home_page.dart';
-import 'pages/others_page.dart';
-import 'pages/settings_page.dart';
+import 'pages/route_info_page.dart';
+import 'pages/info_page.dart';
+import 'pages/go_benefits_page.dart';
+import 'pages/my_account_page.dart';
 import 'utils/version_check_wrapper.dart';
 import 'utils/font_size_manager.dart';
+import 'utils/global_login_state.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -79,12 +82,14 @@ class MainScaffold extends StatefulWidget {
 }
 
 class _MainScaffoldState extends State<MainScaffold> {
-  int _selectedIndex = 1;
+  int _selectedIndex = 2; // 主頁在中間位置
 
   final List<Widget> _pages = [
-    const OthersPage(),
+    const RouteInfoPage(),
+    const InfoPage(),
     HomePage(),
-    const SettingsPage(),
+    const GoBenefitsPage(),
+    const MyAccountPage(),
   ];
 
   // 在應用啟動時檢查版本
@@ -107,28 +112,20 @@ class _MainScaffoldState extends State<MainScaffold> {
             _selectedIndex = index;
           });
         },
-        type: BottomNavigationBarType.shifting,
-        selectedFontSize: 14,
-        unselectedFontSize: 0,
-        iconSize: 34,
+        type: BottomNavigationBarType.fixed,
+        selectedFontSize: 12,
+        unselectedFontSize: 12,
+        iconSize: 24,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.widgets_outlined, size: 34),
-            label: '其他',
-            backgroundColor: Color(0xFF22303C),
+            icon: Icon(Icons.directions_subway),
+            label: '查詢乘車資訊',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined, size: 34),
-            label: '主頁',
-            backgroundColor: Color(0xFF22303C),
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined, size: 34),
-            label: '設定',
-            backgroundColor: Color(0xFF22303C),
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.info_outline), label: '資訊'),
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: '主頁'),
+          BottomNavigationBarItem(icon: Icon(Icons.local_offer), label: 'GO優惠'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: '我的帳戶'),
         ],
-        showUnselectedLabels: false,
       ),
     );
   }

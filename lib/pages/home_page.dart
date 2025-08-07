@@ -2,14 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../widgets/draggable_icon_grid.dart';
-import '../widgets/item_selector.dart';
-import '../models/app_item.dart';
-import '../utils/grid_config.dart';
 import '../widgets/adaptive_text.dart';
-import 'detail_page.dart';
+import '../utils/global_login_state.dart';
 import 'chat_page.dart';
-import 'settings_page.dart';
+import 'customize_functions_page.dart';
+import 'dart:async'; // Added for Timer
 
 class HomePage extends StatefulWidget {
   HomePage({Key? key}) : super(key: key);
@@ -19,140 +16,879 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  static const int crossAxisCount = GridConfig.defaultCrossAxisCount;
-  List<AppItem> items = [];
-  bool isDragging = false;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  // 已選擇的功能
+  List<FunctionItem> selectedFunctions = [];
+
+  // 常用站點數據
+  List<Map<String, dynamic>> frequentStations = [
+    {
+      'name': '台北車站',
+      'timeToDirection1': '2分 30秒',
+      'timeToDirection2': '4分 15秒',
+      'destination1': '淡水',
+      'destination2': '南港',
+    },
+    {
+      'name': '西門站',
+      'timeToDirection1': '5分 15秒',
+      'timeToDirection2': '3分 45秒',
+      'destination1': '板橋',
+      'destination2': '淡水',
+    },
+  ];
+
+  // 最近的站點數據
+  Map<String, dynamic> nearestStation = {
+    'name': '忠孝復興站',
+    'timeToDirection1': '1分 45秒',
+    'timeToDirection2': '3分 20秒',
+    'destination1': '南港',
+    'destination2': '淡水',
+  };
+
+  // 模擬到站時間計時器
+  Timer? _timer;
+  int _currentSecond = 0;
+
+  // 最新消息數據
+  List<Map<String, String>> newsItems = [
+    {
+      'title': 'Family Mart x 台北捷運',
+      'content': 'Lorem ipsum dolor sit amet consectetur adipiscing elit',
+      'image': 'assets/images/news1.jpg',
+    },
+    {
+      'title': '宣導訊息',
+      'content': 'Lorem ipsum dolor sit amet consectetur adipiscing elit',
+      'image': 'assets/images/news2.jpg',
+    },
+    {
+      'title': 'Family Mart x 台北捷',
+      'content': 'Lorem ipsum dolor sit amet consectetur adipiscing elit',
+      'image': 'assets/images/news3.jpg',
+    },
+  ];
 
   @override
   void initState() {
     super.initState();
-    _loadSavedLayout();
+    _loadSelectedFunctions();
+    _loadDefaultFunctions();
+    _startTimer();
   }
 
-  // 載入保存的佈局
-  Future<void> _loadSavedLayout() async {
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  // 開始計時器
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _currentSecond = (_currentSecond + 1) % 60;
+        _updateStationTimes();
+      });
+    });
+  }
+
+  // 更新站點時間
+  void _updateStationTimes() {
+    // 模擬時間變化
+    setState(() {
+      // 更新常用站點時間
+      for (int i = 0; i < frequentStations.length; i++) {
+        int baseMinutes1 = i == 0 ? 2 : 5;
+        int baseSeconds1 = i == 0 ? 30 : 15;
+        int adjustedSeconds1 = (baseSeconds1 + _currentSecond) % 60;
+        int adjustedMinutes1 =
+            baseMinutes1 + ((baseSeconds1 + _currentSecond) ~/ 60);
+
+        int baseMinutes2 = i == 0 ? 4 : 3;
+        int baseSeconds2 = i == 0 ? 15 : 45;
+        int adjustedSeconds2 = (baseSeconds2 + _currentSecond) % 60;
+        int adjustedMinutes2 =
+            baseMinutes2 + ((baseSeconds2 + _currentSecond) ~/ 60);
+
+        frequentStations[i]['timeToDirection1'] =
+            '${adjustedMinutes1}分 ${adjustedSeconds1.toString().padLeft(2, '0')}秒';
+        frequentStations[i]['timeToDirection2'] =
+            '${adjustedMinutes2}分 ${adjustedSeconds2.toString().padLeft(2, '0')}秒';
+      }
+
+      // 更新最近站點時間
+      int baseMinutes1 = 1;
+      int baseSeconds1 = 45;
+      int adjustedSeconds1 = (baseSeconds1 + _currentSecond) % 60;
+      int adjustedMinutes1 =
+          baseMinutes1 + ((baseSeconds1 + _currentSecond) ~/ 60);
+
+      int baseMinutes2 = 3;
+      int baseSeconds2 = 20;
+      int adjustedSeconds2 = (baseSeconds2 + _currentSecond) % 60;
+      int adjustedMinutes2 =
+          baseMinutes2 + ((baseSeconds2 + _currentSecond) ~/ 60);
+
+      nearestStation['timeToDirection1'] =
+          '${adjustedMinutes1}分 ${adjustedSeconds1.toString().padLeft(2, '0')}秒';
+      nearestStation['timeToDirection2'] =
+          '${adjustedMinutes2}分 ${adjustedSeconds2.toString().padLeft(2, '0')}秒';
+    });
+  }
+
+  // 載入已選擇的功能
+  Future<void> _loadSelectedFunctions() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedLayout = prefs.getString('home_page_layout');
+      final functionsJson = prefs.getString('selected_functions');
 
-      if (savedLayout != null) {
-        final List<dynamic> savedItems = jsonDecode(savedLayout);
+      if (functionsJson != null) {
+        final List<dynamic> functionsList = jsonDecode(functionsJson);
         setState(() {
-          items = savedItems.map((item) => AppItem.fromJson(item)).toList();
+          selectedFunctions = functionsList
+              .map((item) => FunctionItem.fromJson(item))
+              .toList();
         });
-      } else {
-        // 如果沒有保存的佈局，使用預設佈局
-        _loadDefaultLayout();
       }
     } catch (e) {
-      print('載入佈局失敗: $e');
-      _loadDefaultLayout();
+      print('載入已選擇功能失敗: $e');
     }
   }
 
-  // 載入預設佈局
-  void _loadDefaultLayout() {
-    final defaultItems = [
-      AppItem(name: 'App1', icon: Icons.apps, color: Colors.teal, size: 1),
-      AppItem(name: '聊天', icon: Icons.chat, color: Colors.green, size: 1),
-      AppItem.clock(size: 3), // 使用時鐘 widget
-      AppItem(name: 'App3', icon: Icons.home, color: Colors.purple, size: 1),
-    ];
-    int curRow = 0, curCol = 0;
-    for (var item in defaultItems) {
-      if (curCol + item.size > crossAxisCount) {
-        curRow++;
-        curCol = 0;
-      }
-      item.row = curRow;
-      item.col = curCol;
-      curCol += item.size;
-    }
-    setState(() {
-      items = defaultItems;
-    });
-  }
-
-  // 保存佈局到本地存儲
-  Future<void> _saveLayout() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final layoutJson = jsonEncode(
-        items.map((item) => item.toJson()).toList(),
-      );
-      await prefs.setString('home_page_layout', layoutJson);
-    } catch (e) {
-      print('保存佈局失敗: $e');
+  // 載入預設功能
+  void _loadDefaultFunctions() {
+    if (selectedFunctions.isEmpty) {
+      setState(() {
+        selectedFunctions = [
+          FunctionItem(
+            id: 'lost_found',
+            name: '遺失物協尋',
+            icon: Icons.search,
+            category: 'warm',
+          ),
+          FunctionItem(
+            id: 'emergency',
+            name: '緊急救助',
+            icon: Icons.emergency,
+            category: 'warm',
+          ),
+          FunctionItem(
+            id: 'chat',
+            name: '聊天',
+            icon: Icons.chat,
+            category: 'member',
+          ),
+          FunctionItem(
+            id: 'member',
+            name: '會員',
+            icon: Icons.person,
+            category: 'member',
+          ),
+        ];
+      });
     }
   }
 
-  void _addItem(AppItem item) {
-    setState(() {
-      // 找到第一個可用的位置
-      int curRow = 0, curCol = 0;
-      bool placed = false;
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        children: [
+          // 頂部標題欄
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            color: const Color(0xFF22303C),
+            child: const Center(
+              child: Text(
+                '台北捷運',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
 
-      while (!placed) {
-        // 檢查是否有足夠空間放置
-        if (curCol + item.size > crossAxisCount) {
-          curRow++;
-          curCol = 0;
-        }
+          // 主要內容區域
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 常用站點區塊
+                  _buildFrequentStationsSection(),
 
-        // 檢查是否與現有項目重疊
-        bool canPlace = true;
-        for (final existingItem in items) {
-          for (int dx = 0; dx < item.size; dx++) {
-            for (int odx = 0; odx < existingItem.size; odx++) {
-              if (curRow == existingItem.row &&
-                  (curCol + dx) == (existingItem.col + odx)) {
-                canPlace = false;
-                break;
-              }
-            }
-            if (!canPlace) break;
-          }
-          if (!canPlace) break;
-        }
+                  const SizedBox(height: 24),
 
-        if (canPlace) {
-          item.row = curRow;
-          item.col = curCol;
-          items.add(item);
-          placed = true;
-        } else {
-          curCol++;
-          if (curCol >= crossAxisCount) {
-            curRow++;
-            curCol = 0;
-          }
-        }
-      }
-    });
-    // 保存佈局
-    _saveLayout();
+                  // 常用功能區塊
+                  _buildFrequentFunctionsSection(),
+
+                  const SizedBox(height: 24),
+
+                  // 最新消息區塊
+                  _buildLatestNewsSection(),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  void _openDetail(AppItem item) {
-    // 如果是聊天圖標，打開聊天頁面
-    if (item.name == '聊天') {
-      // 檢查用戶是否已登入
-      if (!GlobalLoginState.isLoggedIn) {
+  // 常用站點區塊
+  Widget _buildFrequentStationsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '常用站點',
+          style: TextStyle(
+            color: Color(0xFF114D4D),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        Column(
+          children: [
+            // 前兩個常用站點
+            ...frequentStations.map((station) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22303C),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF114D4D), width: 1),
+                ),
+                child: Row(
+                  children: [
+                    // 左側：車站圖標和名稱
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF3A4A5A),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Icon(
+                                  Icons.train,
+                                  color: Color(0xFF26C6DA),
+                                  size: 16,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                station['name'],
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF26C6DA),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${station['timeToDirection1']} 往 ${station['destination1']}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF26C6DA),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${station['timeToDirection2']} 往 ${station['destination2']}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // 右側：目的地
+                    Expanded(
+                      flex: 1,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 16,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF3A4A5A),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '往 ${station['destination1']}',
+                                style: const TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Container(
+                                width: 16,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF3A4A5A),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '往 ${station['destination2']}',
+                                style: const TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            // 最近的站點
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF22303C),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF114D4D), width: 1),
+              ),
+              child: Row(
+                children: [
+                  // 左側：車站圖標和名稱
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 24,
+                              height: 24,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3A4A5A),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Icon(
+                                Icons.train,
+                                color: Color(0xFF26C6DA),
+                                size: 16,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              nearestStation['name']!,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF26C6DA),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${nearestStation['timeToDirection1']!} 往 ${nearestStation['destination1']}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF26C6DA),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${nearestStation['timeToDirection2']!} 往 ${nearestStation['destination2']}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // 右側：目的地
+                  Expanded(
+                    flex: 1,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 16,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3A4A5A),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '往 ${nearestStation['destination1']}',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Container(
+                              width: 16,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3A4A5A),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '往 ${nearestStation['destination2']}',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // 常用功能區塊
+  Widget _buildFrequentFunctionsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              '常用功能',
+              style: TextStyle(
+                color: Color(0xFF114D4D),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            TextButton(
+              onPressed: () => _showCustomizeFunctions(),
+              child: const Text(
+                '更多功能',
+                style: TextStyle(color: Color(0xFF26C6DA), fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // 功能按鈕網格
+        Row(
+          children: [
+            for (int i = 0; i < 4; i++)
+              Expanded(
+                child: i < selectedFunctions.length
+                    ? _buildSelectedFunctionButton(selectedFunctions[i], i)
+                    : _buildEmptyFunctionButton(),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // 已選擇的功能按鈕
+  Widget _buildSelectedFunctionButton(FunctionItem function, int index) {
+    return GestureDetector(
+      onTap: () => _handleFunctionTap(function),
+      onLongPress: () => _showRemoveDialog(index),
+      child: Container(
+        height: 80,
+        margin: const EdgeInsets.only(right: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF22303C),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF114D4D), width: 1),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(function.icon, color: const Color(0xFF26C6DA), size: 24),
+            const SizedBox(height: 4),
+            Text(
+              function.name,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 空的功能按鈕
+  Widget _buildEmptyFunctionButton() {
+    return Container(
+      height: 80,
+      margin: const EdgeInsets.only(right: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE0E0E0),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFCCCCCC),
+          style: BorderStyle.solid,
+          width: 2,
+        ),
+      ),
+      child: const Center(
+        child: Icon(Icons.add, color: Color(0xFF999999), size: 24),
+      ),
+    );
+  }
+
+  // 最新消息區塊
+  Widget _buildLatestNewsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '最新消息',
+          style: TextStyle(
+            color: Color(0xFF114D4D),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        SizedBox(
+          height: 210,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: newsItems.length,
+            itemBuilder: (context, index) {
+              final news = newsItems[index];
+              return Container(
+                width: 280,
+                margin: const EdgeInsets.only(right: 16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22303C),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF114D4D), width: 1),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 圖片佔位符
+                    Container(
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3A4A5A),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
+                        ),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.image, color: Colors.grey, size: 40),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            news['title']!,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            news['content']!,
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 12,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 顯示自訂功能頁面
+  void _showCustomizeFunctions() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CustomizeFunctionsPage(
+          selectedFunctions: selectedFunctions,
+          onFunctionsChanged: (functions) {
+            setState(() {
+              selectedFunctions = functions;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  // 處理功能點擊
+  void _handleFunctionTap(FunctionItem function) {
+    switch (function.id) {
+      case 'lost_found':
+        _showLostAndFound();
+        break;
+      case 'emergency':
+        _showEmergencyHelp();
+        break;
+      case 'chat':
+        _openChat();
+        break;
+      case 'member':
+        _showMemberInfo();
+        break;
+      default:
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('請先登入後再使用聊天功能')));
-        return;
-      }
-
-      // 顯示聊天室選擇對話框
-      _showRoomSelectionDialog();
-    } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => DetailPage(item: item)),
-      );
+        ).showSnackBar(SnackBar(content: Text('${function.name} 功能開發中')));
     }
+  }
+
+  // 顯示移除對話框
+  void _showRemoveDialog(int index) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22303C),
+        title: const Text(
+          '移除功能',
+          style: TextStyle(color: Colors.white),
+          textAlign: TextAlign.center,
+        ),
+        content: Text(
+          '確定要移除「${selectedFunctions[index].name}」嗎？',
+          style: const TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                selectedFunctions.removeAt(index);
+              });
+              Navigator.pop(context);
+              _saveSelectedFunctions();
+            },
+            child: const Text('確定', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 保存已選擇的功能
+  Future<void> _saveSelectedFunctions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final functionsJson = selectedFunctions.map((f) => f.toJson()).toList();
+      await prefs.setString('selected_functions', jsonEncode(functionsJson));
+    } catch (e) {
+      print('保存已選擇功能失敗: $e');
+    }
+  }
+
+  // 遺失物協尋
+  void _showLostAndFound() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22303C),
+        title: const Text(
+          '遺失物協尋',
+          style: TextStyle(color: Colors.white),
+          textAlign: TextAlign.center,
+        ),
+        content: const Text('遺失物協尋服務', style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('確定', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 緊急救助
+  void _showEmergencyHelp() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22303C),
+        title: const Text(
+          '緊急救助',
+          style: TextStyle(color: Colors.white),
+          textAlign: TextAlign.center,
+        ),
+        content: const Text('緊急救助服務', style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('確定', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 會員資訊
+  void _showMemberInfo() {
+    final userName = GlobalLoginState.userName.isNotEmpty
+        ? GlobalLoginState.userName
+        : '未登入';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF22303C),
+        title: const Text(
+          '會員資訊',
+          style: TextStyle(color: Colors.white),
+          textAlign: TextAlign.center,
+        ),
+        content: Text(
+          '顯示名稱: $userName',
+          style: const TextStyle(color: Colors.white),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('確定', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 打開聊天
+  void _openChat() {
+    // 檢查用戶是否已登入
+    if (!GlobalLoginState.isLoggedIn) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('請先登入後再使用聊天功能')));
+      return;
+    }
+
+    // 顯示聊天室選擇對話框
+    _showRoomSelectionDialog();
   }
 
   // 顯示聊天室選擇對話框
@@ -230,133 +966,5 @@ class _HomePageState extends State<HomePage> {
         context,
       ).showSnackBar(SnackBar(content: Text('載入聊天室失敗: $e')));
     }
-  }
-
-  void _removeItem(int index) {
-    setState(() {
-      items.removeAt(index);
-    });
-    // 保存佈局
-    _saveLayout();
-  }
-
-  // from: index in items, to: gridIndex
-  void _onReorder(int from, int toGridIndex) {
-    setState(() {
-      // 計算目標 row/col
-      int row = toGridIndex ~/ crossAxisCount;
-      int col = toGridIndex % crossAxisCount;
-      final moving = items[from];
-      // 檢查是否超出邊界
-      if (col + moving.size > crossAxisCount) return;
-      // 檢查是否重疊
-      for (var i = 0; i < items.length; i++) {
-        if (i == from) continue;
-        final other = items[i];
-        for (int dx = 0; dx < moving.size; dx++) {
-          for (int odx = 0; odx < other.size; odx++) {
-            if (row == other.row && (col + dx) == (other.col + odx)) {
-              return; // 有重疊
-            }
-          }
-        }
-      }
-      moving.row = row;
-      moving.col = col;
-    });
-    // 保存佈局
-    _saveLayout();
-  }
-
-  void _onDragStateChanged(bool dragging) {
-    setState(() {
-      isDragging = dragging;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const AdaptiveTitle('主頁'),
-                      ItemSelector(onAdd: (item) => _addItem(item)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF22303C),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Color(0xFF114D4D), width: 2),
-                      ),
-                      padding: const EdgeInsets.all(12),
-                      child: DraggableIconGrid(
-                        items: items,
-                        crossAxisCount: crossAxisCount,
-                        onTap: _openDetail,
-                        onRemove: _removeItem,
-                        onReorder: _onReorder,
-                        onDragStateChanged: _onDragStateChanged,
-                        gridColor: GridConfig.defaultGridColor,
-                        iconBgColor: GridConfig.defaultIconBgColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // 移除區域（顯示在 navigation bar 之前）
-          if (isDragging)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: DragTarget<int>(
-                onAcceptWithDetails: (details) {
-                  final from = details.data;
-                  _removeItem(from);
-                },
-                builder: (context, candidateData, rejectedData) {
-                  return Container(
-                    height: 80, // navigation bar 高度
-                    decoration: BoxDecoration(
-                      color: candidateData.isNotEmpty
-                          ? Colors.red.withValues(alpha: 0.8)
-                          : Colors.red.withValues(alpha: 0.3),
-                      border: Border.all(
-                        color: candidateData.isNotEmpty
-                            ? Colors.red
-                            : Colors.red.withValues(alpha: 0.5),
-                        width: 2,
-                      ),
-                    ),
-                    child: Center(
-                      child: AdaptiveText(
-                        '拖曳到此處移除',
-                        fontSizeMultiplier: 1.0,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-        ],
-      ),
-    );
   }
 }
