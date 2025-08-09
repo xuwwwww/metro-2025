@@ -44,6 +44,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
     // 如果已經登入，載入用戶權限
     if (_isLoggedIn) {
       _loadUserPermissions();
+      _verifyUserStillExists();
     }
     // 初始化字體大小管理器
     _initializeFontSize();
@@ -146,10 +147,10 @@ class _MyAccountPageState extends State<MyAccountPage> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 12),
             color: const Color(0xFF2A3A4A),
-            child: const Center(
+            child: Center(
               child: Text(
-                '我的帳戶',
-                style: TextStyle(
+                _userName.isNotEmpty ? '我的帳戶 · $_userName' : '我的帳戶',
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
@@ -336,8 +337,6 @@ class _MyAccountPageState extends State<MyAccountPage> {
       ],
     );
   }
-
-
 
   Widget _buildSettingTile({
     required IconData icon,
@@ -642,12 +641,13 @@ class _MyAccountPageState extends State<MyAccountPage> {
 
   // 登入對話框
   void _showLoginDialog(BuildContext context) {
+    final outerContext = context;
     final uidController = TextEditingController();
     final pwdController = TextEditingController();
 
     showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
+      context: outerContext,
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: const Color(0xFF22303C),
         title: const Text(
           '登入',
@@ -693,7 +693,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('取消', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
@@ -706,13 +706,13 @@ class _MyAccountPageState extends State<MyAccountPage> {
 
               if (uid.isEmpty) {
                 ScaffoldMessenger.of(
-                  context,
+                  outerContext,
                 ).showSnackBar(const SnackBar(content: Text('請輸入 UID')));
                 return;
               }
               if (password.isEmpty) {
                 ScaffoldMessenger.of(
-                  context,
+                  outerContext,
                 ).showSnackBar(const SnackBar(content: Text('請輸入密碼')));
                 return;
               }
@@ -722,7 +722,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
                 final doc = await _firestore.collection('users').doc(uid).get();
                 if (!doc.exists) {
                   ScaffoldMessenger.of(
-                    context,
+                    outerContext,
                   ).showSnackBar(const SnackBar(content: Text('帳戶不存在，請先創立帳戶')));
                   return;
                 }
@@ -733,7 +733,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
 
                 if (password != storedPassword) {
                   ScaffoldMessenger.of(
-                    context,
+                    outerContext,
                   ).showSnackBar(const SnackBar(content: Text('密碼錯誤')));
                   return;
                 }
@@ -751,14 +751,14 @@ class _MyAccountPageState extends State<MyAccountPage> {
                   isAdmin: (uid == '0'),
                   userName: userName,
                 );
-                Navigator.pop(context);
+                Navigator.pop(dialogContext);
                 ScaffoldMessenger.of(
-                  context,
+                  outerContext,
                 ).showSnackBar(const SnackBar(content: Text('登入成功')));
                 await _loadUserPermissions();
               } catch (e) {
                 ScaffoldMessenger.of(
-                  context,
+                  outerContext,
                 ).showSnackBar(const SnackBar(content: Text('登入失敗，請稍後再試')));
               }
             },
@@ -771,12 +771,13 @@ class _MyAccountPageState extends State<MyAccountPage> {
 
   // 創立帳戶對話框
   void _showCreateAccountDialog(BuildContext context) {
+    final outerContext = context;
     final nameController = TextEditingController();
     final pwdController = TextEditingController();
 
     showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
+      context: outerContext,
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: const Color(0xFF22303C),
         title: const Text(
           '創立帳戶',
@@ -822,7 +823,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('取消', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
@@ -835,20 +836,25 @@ class _MyAccountPageState extends State<MyAccountPage> {
 
               if (name.isEmpty) {
                 ScaffoldMessenger.of(
-                  context,
+                  outerContext,
                 ).showSnackBar(const SnackBar(content: Text('請輸入顯示名稱')));
                 return;
               }
               if (password.isEmpty) {
                 ScaffoldMessenger.of(
-                  context,
+                  outerContext,
                 ).showSnackBar(const SnackBar(content: Text('請輸入密碼')));
                 return;
               }
 
               try {
-                // 生成下一個可用的 UID
-                final nextUid = await _getNextAvailableUid();
+                // 以雲端 config 取得下一個 UID（交易遞增），若失敗則回退掃描法
+                String nextUid;
+                try {
+                  nextUid = await _reserveNextUidFromConfig();
+                } catch (_) {
+                  nextUid = await _getNextAvailableUid();
+                }
 
                 await _firestore.collection('users').doc(nextUid).set({
                   'displayName': name,
@@ -856,16 +862,53 @@ class _MyAccountPageState extends State<MyAccountPage> {
                   'password': password,
                 });
 
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('帳戶創立成功！您的 UID 是: $nextUid'),
-                    duration: const Duration(seconds: 4),
-                  ),
+                // 直接登入並保存狀態
+                setState(() {
+                  _isLoggedIn = true;
+                  _currentUid = nextUid;
+                  _isAdmin = false;
+                  _userName = name;
+                });
+                await GlobalLoginState.setLoginState(
+                  isLoggedIn: true,
+                  uid: nextUid,
+                  isAdmin: false,
+                  userName: name,
                 );
-                Navigator.pop(context);
+
+                // 顯示 UID 成功訊息
+                if (mounted) {
+                  Navigator.pop(dialogContext); // 關閉建立對話框
+                }
+                if (mounted) {
+                  showDialog(
+                    context: outerContext,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: const Color(0xFF22303C),
+                      title: const Text(
+                        '帳戶創立成功',
+                        style: TextStyle(color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                      content: Text(
+                        '您的 UID 是: $nextUid',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text(
+                            '確定',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
               } catch (e) {
                 ScaffoldMessenger.of(
-                  context,
+                  outerContext,
                 ).showSnackBar(const SnackBar(content: Text('創立帳戶失敗，請稍後再試')));
               }
             },
@@ -874,6 +917,25 @@ class _MyAccountPageState extends State<MyAccountPage> {
         ],
       ),
     );
+  }
+
+  // 使用 Firestore config 以交易方式保留下一個 UID 並自動 +1
+  Future<String> _reserveNextUidFromConfig() async {
+    final docRef = _firestore.collection('config').doc('app');
+    return await _firestore.runTransaction<String>((tx) async {
+      final snap = await tx.get(docRef);
+      int counter = 1;
+      if (snap.exists) {
+        final data = snap.data() as Map<String, dynamic>?;
+        final value = data?['uidCounter'];
+        if (value is int) counter = value;
+        if (value is String && int.tryParse(value) != null)
+          counter = int.parse(value);
+      }
+      final reserved = counter.toString();
+      tx.set(docRef, {'uidCounter': counter + 1}, SetOptions(merge: true));
+      return reserved;
+    });
   }
 
   // 獲取下一個可用的 UID
@@ -905,6 +967,30 @@ class _MyAccountPageState extends State<MyAccountPage> {
     } catch (e) {
       // 如果出錯，返回一個基於時間戳的 UID
       return DateTime.now().millisecondsSinceEpoch.toString();
+    }
+  }
+
+  // 啟動時驗證本地已登入帳號是否仍存在雲端
+  Future<void> _verifyUserStillExists() async {
+    if (_currentUid == null || _currentUid!.isEmpty) return;
+    try {
+      final snap = await _firestore.collection('users').doc(_currentUid).get();
+      if (!snap.exists) {
+        await GlobalLoginState.clearLoginState();
+        setState(() {
+          _isLoggedIn = false;
+          _currentUid = null;
+          _isAdmin = false;
+          _userName = '';
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('您的帳號已不存在，請重新登入')));
+        }
+      }
+    } catch (_) {
+      // 靜默失敗，不打斷啟動
     }
   }
 

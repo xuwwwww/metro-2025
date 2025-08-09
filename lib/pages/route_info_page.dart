@@ -207,7 +207,7 @@ class RouteInfoPage extends StatelessWidget {
                     panEnabled: true, // 允許拖拽 - 支援多方向滑動
                     scaleEnabled: false, // 禁用縮放，只允許滑動
                     child: Image.asset(
-                      'assets/routemap2023n.png',
+                      'lib/assets/routemap2023n.png',
                       fit: BoxFit.none, // 保持原始大小，允許滑動查看
                       errorBuilder: (context, error, stackTrace) {
                         return Container(

@@ -142,34 +142,60 @@ class _CustomizeFunctionsPageState extends State<CustomizeFunctionsPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // 頂部標題欄
+            // Header（左關閉、中標題、右編輯/儲存）
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-              color: const Color(0xFF22303C),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              decoration: const BoxDecoration(
+                color: Color(0xFF22303C),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  const Text(
-                    '自訂常用功能',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      label: const Text(
+                        '關閉',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
                     ),
                   ),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        isEditMode = !isEditMode;
-                      });
-                      if (!isEditMode) {
-                        _saveFunctions();
-                      }
-                    },
+                  const Center(
                     child: Text(
-                      isEditMode ? '儲存' : '編輯',
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
+                      '自訂常用功能',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () {
+                        setState(() => isEditMode = !isEditMode);
+                        if (!isEditMode) _saveFunctions();
+                      },
+                      child: Text(
+                        isEditMode ? '儲存' : '編輯',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -232,19 +258,32 @@ class _CustomizeFunctionsPageState extends State<CustomizeFunctionsPage> {
         ),
         const SizedBox(height: 12),
         Container(
-          height: 80,
+          height: 86,
+          decoration: BoxDecoration(
+            color: const Color(0xFF2A3A4A),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF114D4D)),
+          ),
+          padding: const EdgeInsets.all(8),
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            itemCount: 4, // 固定4個位置
+            itemCount: 4,
             itemBuilder: (context, index) {
               if (index < selectedFunctions.length) {
                 final function = selectedFunctions[index];
                 return Container(
-                  width: 80,
-                  margin: const EdgeInsets.only(right: 12),
+                  width: 86,
+                  margin: const EdgeInsets.only(right: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFF3A4A5A),
                     borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 4,
+                        offset: Offset(0, 1),
+                      ),
+                    ],
                   ),
                   child: Stack(
                     children: [
@@ -257,12 +296,12 @@ class _CustomizeFunctionsPageState extends State<CustomizeFunctionsPage> {
                               color: const Color(0xFF26C6DA),
                               size: 24,
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 6),
                             Text(
                               function.name,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 10,
+                                fontSize: 11,
                               ),
                               textAlign: TextAlign.center,
                               maxLines: 2,
@@ -296,16 +335,14 @@ class _CustomizeFunctionsPageState extends State<CustomizeFunctionsPage> {
                   ),
                 );
               } else {
-                // 空位置
                 return Container(
-                  width: 80,
-                  margin: const EdgeInsets.only(right: 12),
+                  width: 86,
+                  margin: const EdgeInsets.only(right: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFF2A3A4A),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: const Color(0xFF26C6DA),
-                      style: BorderStyle.solid,
                       width: 2,
                     ),
                   ),
@@ -353,9 +390,7 @@ class _CustomizeFunctionsPageState extends State<CustomizeFunctionsPage> {
 
             return GestureDetector(
               onTap: () {
-                if (isEditMode) {
-                  _toggleFunction(function);
-                }
+                if (isEditMode) _toggleFunction(function);
               },
               child: Container(
                 decoration: BoxDecoration(
@@ -366,6 +401,13 @@ class _CustomizeFunctionsPageState extends State<CustomizeFunctionsPage> {
                   border: isSelected
                       ? Border.all(color: const Color(0xFF26C6DA), width: 2)
                       : null,
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 3,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
@@ -408,13 +450,10 @@ class _CustomizeFunctionsPageState extends State<CustomizeFunctionsPage> {
       );
 
       if (existingIndex != -1) {
-        // 如果已選擇，則移除
         selectedFunctions.removeAt(existingIndex);
       } else if (selectedFunctions.length < 4) {
-        // 如果未選擇且未滿4個，則添加
         selectedFunctions.add(function);
       } else {
-        // 如果已滿4個，顯示提示
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('最多只能選擇4個功能')));
