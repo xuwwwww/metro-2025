@@ -46,12 +46,16 @@
             </intent-filter>
         </activity>
 
-        <!-- App Widget Provider (桌面小工具) - 將在後續提交 provider 與 layout -->
-        <receiver android:name=".widgets.ArrivalWidgetProvider" android:exported="false">
+        <!-- App Widget Provider -->
+        <receiver
+            android:name=".ArrivalWidgetProvider"
+            android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
             </intent-filter>
-            <meta-data android:name="android.appwidget.provider" android:resource="@xml/arrival_widget_info"/>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/arrival_widget_info"/>
         </receiver>
 
         <!-- Don't delete the meta-data below.

@@ -1,33 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical"
-    android:padding="8dp"
-    android:background="#22303C"
+    android:id="@+id/widget_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="#22303C">
 
     <TextView
-        android:id="@+id/station_name"
+        android:id="@+id/widget_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:textColor="#FFFFFF"
         android:textSize="14sp"
         android:textStyle="bold"
-        android:text="台北車站"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
+        android:text="最近站點 到站"/>
 
     <TextView
-        android:id="@+id/time_dir1"
+        android:id="@+id/widget_line1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:textColor="#26C6DA"
-        android:textSize="12sp"
-        android:text="2分30秒 · 往 淡水"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
+        android:textSize="13sp"
+        android:layout_marginTop="6dp"
+        android:text="2分30秒 往 A"/>
 
     <TextView
-        android:id="@+id/time_dir2"
-        android:textColor="#FFB74D"
-        android:textSize="12sp"
-        android:text="4分15秒 · 往 南港"
+        android:id="@+id/widget_line2"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content" />
+        android:layout_height="wrap_content"
+        android:textColor="#FFB74D"
+        android:textSize="13sp"
+        android:layout_marginTop="2dp"
+        android:text="4分15秒 往 B"/>
+
 </LinearLayout>
