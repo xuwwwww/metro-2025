@@ -186,52 +186,27 @@ class _CustomizeFunctionsPageState extends State<CustomizeFunctionsPage> {
                     topRight: Radius.circular(20),
                   ),
                 ),
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (ScrollNotification scrollInfo) {
-                    // 當滾動到頂部時，允許往下滑回到主頁
-                    if (scrollInfo.metrics.pixels <= 0 && scrollInfo is ScrollStartNotification) {
-                      Navigator.pop(context);
-                      return true;
-                    }
-                    return false;
-                  },
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // 往下滑提示
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: const Text(
-                            '往下滑回到主頁',
-                            style: TextStyle(
-                              color: Colors.grey,
-                              fontSize: 12,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 已選擇區塊
+                      _buildSelectedSection(),
+                      const SizedBox(height: 24),
 
-                        // 已選擇區塊
-                        _buildSelectedSection(),
-                        const SizedBox(height: 24),
+                      // 營運資訊區塊
+                      _buildFunctionSection('營運資訊', operationalFunctions),
+                      const SizedBox(height: 24),
 
-                        // 營運資訊區塊
-                        _buildFunctionSection('營運資訊', operationalFunctions),
-                        const SizedBox(height: 24),
+                      // 會員專屬區塊
+                      _buildFunctionSection('會員專屬', memberFunctions),
+                      const SizedBox(height: 24),
 
-                        // 會員專屬區塊
-                        _buildFunctionSection('會員專屬', memberFunctions),
-                        const SizedBox(height: 24),
-
-                        // 溫馨服務區塊
-                        _buildFunctionSection('溫馨服務', warmServiceFunctions),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
+                      // 溫馨服務區塊
+                      _buildFunctionSection('溫馨服務', warmServiceFunctions),
+                      const SizedBox(height: 24),
+                    ],
                   ),
                 ),
               ),

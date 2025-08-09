@@ -7,6 +7,7 @@ import '../utils/global_login_state.dart';
 import 'chat_page.dart';
 import 'customize_functions_page.dart';
 import 'dart:async'; // Added for Timer
+import 'edit_favorite_stations_page.dart'; // Added for EditFavoriteStationsPage
 
 class HomePage extends StatefulWidget {
   HomePage({Key? key}) : super(key: key);
@@ -31,13 +32,15 @@ class _HomePageState extends State<HomePage> {
       'destination2': '南港',
     },
     {
-      'name': '西門站',
+      'name': '西門',
       'timeToDirection1': '5分 15秒',
       'timeToDirection2': '3分 45秒',
       'destination1': '板橋',
       'destination2': '淡水',
     },
   ];
+  // 使用者自訂常用站點名單（僅名稱，用於編輯頁面）
+  List<String> favoriteStationNames = ['台北車站', '西門'];
 
   // 最近的站點數據
   Map<String, dynamic> nearestStation = {
@@ -144,6 +147,7 @@ class _HomePageState extends State<HomePage> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final functionsJson = prefs.getString('selected_functions');
+      final favStationsJson = prefs.getString('favorite_stations');
 
       if (functionsJson != null) {
         final List<dynamic> functionsList = jsonDecode(functionsJson);
@@ -153,9 +157,45 @@ class _HomePageState extends State<HomePage> {
               .toList();
         });
       }
+
+      if (favStationsJson != null) {
+        final List<dynamic> favList = jsonDecode(favStationsJson);
+        favoriteStationNames = favList.cast<String>();
+        _rebuildFrequentStationsFromNames();
+      }
     } catch (e) {
       print('載入已選擇功能失敗: $e');
     }
+  }
+
+  // 依 favoriteStationNames 重建 frequentStations（保留目前時間/目的地邏輯）
+  void _rebuildFrequentStationsFromNames() {
+    // 簡化：依名稱保留既有目的地，若無則給預設方向
+    final List<Map<String, dynamic>> rebuilt = [];
+    for (final name in favoriteStationNames.take(2)) {
+      final existing = frequentStations.firstWhere(
+        (e) => e['name'] == name,
+        orElse: () => {
+          'name': name,
+          'timeToDirection1': '2分 30秒',
+          'timeToDirection2': '4分 15秒',
+          'destination1': '往A',
+          'destination2': '往B',
+        },
+      );
+      rebuilt.add({...existing});
+    }
+    setState(() {
+      frequentStations = rebuilt;
+    });
+  }
+
+  Future<void> _saveFavoriteStations() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'favorite_stations',
+      jsonEncode(favoriteStationNames),
+    );
   }
 
   // 載入預設功能
@@ -247,13 +287,25 @@ class _HomePageState extends State<HomePage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '常用站點',
-          style: TextStyle(
-            color: Color(0xFF114D4D),
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              '常用站點',
+              style: TextStyle(
+                color: Color(0xFF114D4D),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            TextButton(
+              onPressed: _openEditFavoriteStations,
+              child: const Text(
+                '編輯',
+                style: TextStyle(color: Color(0xFF26C6DA)),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
 
@@ -271,9 +323,9 @@ class _HomePageState extends State<HomePage> {
                 ),
                 child: Row(
                   children: [
-                    // 左側：車站圖標和名稱
+                    // 左側：車站圖標和名稱（縮小寬度）
                     Expanded(
-                      flex: 2,
+                      flex: 1,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -304,93 +356,25 @@ class _HomePageState extends State<HomePage> {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF26C6DA),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${station['timeToDirection1']} 往 ${station['destination1']}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF26C6DA),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${station['timeToDirection2']} 往 ${station['destination2']}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
+                          // 已將進站時間移至右側顯示
                         ],
                       ),
                     ),
 
-                    // 右側：目的地
+                    // 右側：兩方向進站資訊（擴大寬度）
                     Expanded(
                       flex: 1,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 16,
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF3A4A5A),
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '往 ${station['destination1']}',
-                                style: const TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
+                          _buildArrivalChip(
+                            '${station['timeToDirection1']} | 往 ${station['destination1']}',
+                            const Color(0xFF26C6DA),
                           ),
                           const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Container(
-                                width: 16,
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF3A4A5A),
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '往 ${station['destination2']}',
-                                style: const TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
+                          _buildArrivalChip(
+                            '${station['timeToDirection2']} | 往 ${station['destination2']}',
+                            const Color(0xFFFFB74D),
                           ),
                         ],
                       ),
@@ -399,6 +383,20 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
             }),
+            // 最近的站點標題
+            const SizedBox(height: 8),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '最近的站點',
+                style: TextStyle(
+                  color: Color(0xFF114D4D),
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
             // 最近的站點
             Container(
               margin: const EdgeInsets.only(top: 12),
@@ -410,9 +408,9 @@ class _HomePageState extends State<HomePage> {
               ),
               child: Row(
                 children: [
-                  // 左側：車站圖標和名稱
+                  // 左側：車站圖標和名稱（縮小寬度）
                   Expanded(
-                    flex: 2,
+                    flex: 1,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -443,93 +441,31 @@ class _HomePageState extends State<HomePage> {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF26C6DA),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '${nearestStation['timeToDirection1']!} 往 ${nearestStation['destination1']}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF26C6DA),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '${nearestStation['timeToDirection2']!} 往 ${nearestStation['destination2']}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
+                        // 已將進站時間移至右側顯示
                       ],
                     ),
                   ),
 
-                  // 右側：目的地
+                  // 右側：兩方向進站資訊（擴大寬度）
                   Expanded(
                     flex: 1,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 16,
-                              height: 16,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF3A4A5A),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '往 ${nearestStation['destination1']}',
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: _buildArrivalChip(
+                            '${nearestStation['timeToDirection1']!} | 往 ${nearestStation['destination1']}',
+                            const Color(0xFF26C6DA),
+                          ),
                         ),
                         const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Container(
-                              width: 16,
-                              height: 16,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF3A4A5A),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '往 ${nearestStation['destination2']}',
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: _buildArrivalChip(
+                            '${nearestStation['timeToDirection2']!} | 往 ${nearestStation['destination2']}',
+                            const Color(0xFFFFB74D),
+                          ),
                         ),
                       ],
                     ),
@@ -716,6 +652,37 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       ],
+    );
+  }
+
+  // 彩色徽章樣式的進站資訊
+  Widget _buildArrivalChip(String text, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.schedule, color: color, size: 14),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -966,5 +933,22 @@ class _HomePageState extends State<HomePage> {
         context,
       ).showSnackBar(SnackBar(content: Text('載入聊天室失敗: $e')));
     }
+  }
+
+  void _openEditFavoriteStations() async {
+    // 頁面需要：目前名單 favoriteStationNames，返回回調更新
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EditFavoriteStationsPage(
+          initialSelected: favoriteStationNames,
+          onChanged: (list) {
+            favoriteStationNames = list;
+            _saveFavoriteStations();
+            _rebuildFrequentStationsFromNames();
+          },
+        ),
+      ),
+    );
   }
 }

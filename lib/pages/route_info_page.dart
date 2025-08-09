@@ -32,7 +32,7 @@ class RouteInfoPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              
+
               // 標題
               Container(
                 padding: const EdgeInsets.all(20),
@@ -45,7 +45,7 @@ class RouteInfoPage extends StatelessWidget {
                   ),
                 ),
               ),
-              
+
               // 內容區域
               Expanded(
                 child: Padding(
@@ -77,7 +77,7 @@ class RouteInfoPage extends StatelessWidget {
                         color: Colors.purple,
                       ),
                       const SizedBox(height: 20),
-                      
+
                       // 關閉按鈕
                       ElevatedButton(
                         onPressed: () => Navigator.pop(context),
@@ -89,10 +89,7 @@ class RouteInfoPage extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        child: const Text(
-                          '關閉',
-                          style: TextStyle(fontSize: 16),
-                        ),
+                        child: const Text('關閉', style: TextStyle(fontSize: 16)),
                       ),
                     ],
                   ),
@@ -127,11 +124,7 @@ class RouteInfoPage extends StatelessWidget {
               color: color.withOpacity(0.2),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 24,
-            ),
+            child: Icon(icon, color: color, size: 24),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -149,10 +142,7 @@ class RouteInfoPage extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                  ),
+                  style: const TextStyle(color: Colors.grey, fontSize: 14),
                 ),
               ],
             ),
@@ -208,9 +198,7 @@ class RouteInfoPage extends StatelessWidget {
                 // 地圖區域
                 Container(
                   width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                  ),
+                  decoration: BoxDecoration(color: Colors.white),
                   child: InteractiveViewer(
                     constrained: false, // 允許圖片超出邊界，支援自由滑動
                     // minScale: 0.5, // 最小縮放比例 - 暫時註解
@@ -219,7 +207,7 @@ class RouteInfoPage extends StatelessWidget {
                     panEnabled: true, // 允許拖拽 - 支援多方向滑動
                     scaleEnabled: false, // 禁用縮放，只允許滑動
                     child: Image.asset(
-                      'lib/imgs/routemap2023n.png',
+                      'assets/routemap2023n.png',
                       fit: BoxFit.none, // 保持原始大小，允許滑動查看
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
@@ -251,7 +239,7 @@ class RouteInfoPage extends StatelessWidget {
                     ),
                   ),
                 ),
-                
+
                 // 浮動按鈕 - 觸發 Bottom Sheet
                 Positioned(
                   bottom: 20,
@@ -259,10 +247,7 @@ class RouteInfoPage extends StatelessWidget {
                   child: FloatingActionButton(
                     onPressed: () => _showModalBottomSheet(context),
                     backgroundColor: const Color(0xFF26C6DA),
-                    child: const Icon(
-                      Icons.info,
-                      color: Colors.white,
-                    ),
+                    child: const Icon(Icons.info, color: Colors.white),
                   ),
                 ),
               ],

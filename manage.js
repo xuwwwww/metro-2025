@@ -23,10 +23,14 @@ const serviceAccount = require(path.resolve(__dirname, 'serviceAccountKey.json')
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
-// metro stations 待新增
-const TPE_STATIONS = [
-  '台北車站','善導寺','忠孝新生','忠孝復興','忠孝敦化',
-  '國父紀念館','市政府','南港','南港展覽館'
+// 捷運線名稱（分支線納入主線）
+const TPE_LINES = [
+  '淡水信義線',
+  '松山新店線', // 含小碧潭支線
+  '中和新蘆線',
+  '板南線',
+  '文湖線',
+  '環狀線'
 ];
 
 async function main() {
@@ -120,7 +124,7 @@ async function main() {
         
         const userData = userDoc.data();
         
-        // 獲取使用者加入的所有聊天室
+        // 獲取使用者加入的所有聊天室（以線名為單位）
         const userRooms = [];
         for (const roomId of userData.permissions || []) {
           const roomDoc = await db.collection('chatRooms').doc(roomId).get();
@@ -170,10 +174,10 @@ async function main() {
     .command('init-admin', '創立：初始化 ADMIN 帳號並賦予所有聊天室權限', {}, async () => {
       // 建立管理者帳號，並給予所有聊天室權限
       await db.collection('users').doc(ADMIN_UID)
-             .set({ permissions: TPE_STATIONS, password: ADMIN_PASSWORD });
+             .set({ permissions: TPE_LINES, password: ADMIN_PASSWORD });
       // 批次將管理者加入所有聊天室的 members 子集合
       const batch = db.batch();
-      TPE_STATIONS.forEach(roomId => {
+      TPE_LINES.forEach(roomId => {
         const memberRef = db.collection('chatRooms').doc(roomId)
                             .collection('members').doc(ADMIN_UID);
         batch.set(memberRef, { joinedAt: admin.firestore.FieldValue.serverTimestamp() });
@@ -181,11 +185,11 @@ async function main() {
       await batch.commit();
       console.log(`Initialized manage.js v${VERSION}`);
       console.log(`Admin UID=${ADMIN_UID}, Password=${ADMIN_PASSWORD}`);
-      console.log(`Admin 已獲得所有聊天室的成員權限: ${TPE_STATIONS.join(', ')}`);
+      console.log(`Admin 已獲得所有聊天室的成員權限: ${TPE_LINES.join(', ')}`);
     })
-    .command('init-rooms', '創立：初始化所有捷運站聊天室', {}, async () => {
+    .command('init-rooms', '創立：初始化所有捷運線聊天室', {}, async () => {
       const batch = db.batch();
-      TPE_STATIONS.forEach(name => {
+      TPE_LINES.forEach(name => {
         const ref = db.collection('chatRooms').doc(name);
         batch.set(ref, {
           name,
@@ -194,7 +198,7 @@ async function main() {
         });
       });
       await batch.commit();
-      console.log('✔已建立所有台北捷運站聊天室');
+      console.log('✔已建立所有台北捷運線聊天室');
     })
     .command('create-user <uid> <username> <password>', '創立：新增使用者 (permissions=[])', yargs => {
       yargs.positional('uid', { type: 'string', describe: '使用者 UID' })
