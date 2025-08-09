@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/version_check_wrapper.dart';
 import '../utils/version_checker.dart';
-import '../utils/grid_config.dart';
 import '../utils/font_size_manager.dart';
 import '../utils/global_login_state.dart';
 import '../widgets/adaptive_text.dart';
@@ -322,12 +321,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
           subtitle: '清除所有本地保存的設定和佈局',
           onTap: () => _showClearDataDialog(context),
         ),
-        _buildSettingTile(
-          icon: Icons.refresh,
-          title: '重新載入配置',
-          subtitle: '重新載入網格配置設定',
-          onTap: () => _reloadGridConfig(context),
-        ),
+        // 移除舊的網格配置相關選項
         _buildSettingTile(
           icon: Icons.text_fields,
           title: '重置字體大小',
@@ -1043,27 +1037,6 @@ class _MyAccountPageState extends State<MyAccountPage> {
             const SizedBox(height: 8),
             AdaptiveBodyText('遠端版本: $remoteVersion'),
             const SizedBox(height: 16),
-            AdaptiveSubtitle('網格配置:'),
-            const SizedBox(height: 8),
-            FutureBuilder<Map<String, dynamic>>(
-              future: _getGridConfigInfo(),
-              builder: (context, snapshot) {
-                if (snapshot.hasData) {
-                  final config = snapshot.data!;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AdaptiveSmallText('格線大小: ${config['cellSize']}'),
-                      AdaptiveSmallText('格線間距: ${config['cellSpacing']}'),
-                      AdaptiveSmallText('欄位數量: ${config['crossAxisCount']}'),
-                      AdaptiveSmallText('時鐘寬度: ${config['clockWidth']}'),
-                      AdaptiveSmallText('天氣寬度: ${config['weatherWidth']}'),
-                    ],
-                  );
-                }
-                return const AdaptiveSmallText('載入中...');
-              },
-            ),
           ],
         ),
         actions: [
@@ -1079,26 +1052,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
     );
   }
 
-  // 獲取網格配置資訊
-  Future<Map<String, dynamic>> _getGridConfigInfo() async {
-    try {
-      return {
-        'cellSize': GridConfig.cellSize,
-        'cellSpacing': GridConfig.cellSpacing,
-        'crossAxisCount': GridConfig.defaultCrossAxisCount,
-        'clockWidth': GridConfig.getWidgetDimensions('clock')['width'],
-        'weatherWidth': GridConfig.getWidgetDimensions('weather')['width'],
-      };
-    } catch (e) {
-      return {
-        'cellSize': '載入失敗',
-        'cellSpacing': '載入失敗',
-        'crossAxisCount': '載入失敗',
-        'clockWidth': '載入失敗',
-        'weatherWidth': '載入失敗',
-      };
-    }
-  }
+  // 已移除舊的網格配置相關函式
 
   // 顯示清除資料對話框
   void _showClearDataDialog(BuildContext context) {
@@ -1158,33 +1112,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
     }
   }
 
-  // 重新載入網格配置
-  void _reloadGridConfig(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF22303C),
-        title: const Text(
-          '重新載入配置',
-          style: TextStyle(color: Colors.white),
-          textAlign: TextAlign.center,
-        ),
-        content: const Text(
-          '網格配置已重新載入。\n\n請重新啟動應用程式以套用變更。',
-          style: TextStyle(color: Colors.white),
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF26C6DA),
-            ),
-            onPressed: () => Navigator.pop(context),
-            child: const Text('確定', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
+  // 移除舊的網格配置重新載入對話框
 
   // 重置字體大小
   void _resetFontSize(BuildContext context) {

@@ -75,7 +75,7 @@ Metro App is a mobile application that provides:
 - Chat Rooms: Real-time messaging in metro station-themed chat rooms
 - Persistent Storage: Remembers user login state and custom layouts
 - Admin Management: Special admin account (UID: '0') with full permissions
-- Customizable Home Screen: Draggable icon grid with persistent layout
+// Removed: legacy draggable grid feature
 
 ## Development Environment
 
@@ -110,15 +110,14 @@ metro/
 │   ├── models/
 │   │   └── app_item.dart  # AppItem model with JSON serialization
 │   ├── pages/
-│   │   ├── home_page.dart     # Main home screen with draggable grid
+│   │   ├── home_page.dart     # Main home screen
 │   │   ├── chat_page.dart     # Real-time chat interface
 │   │   ├── settings_page.dart # User settings and authentication
 │   │   ├── detail_page.dart   # App detail pages
 │   │   └── others_page.dart   # Other features page
 │   └── widgets/
-│       ├── draggable_icon_grid.dart  # Draggable home screen grid
-│       ├── item_selector.dart        # Icon selection widget
-│       ├── dynamic_widget.dart       # Dynamic widgets (clock, etc.)
+│       ├── item_selector.dart        # (removed)
+│       ├── dynamic_widget.dart       # (removed)
 │       ├── color_picker.dart         # Color selection widget
 │       ├── icon_picker.dart          # Icon selection widget
 │       └── add_icon_button.dart      # Add icon button widget
@@ -289,10 +288,7 @@ node manage.js revoke <uid> <roomId>
 - Message History: All messages stored in Firestore with timestamps
 
 ### Home Screen
-- Draggable Grid: Customizable icon layout with drag-and-drop
-- Persistent Layout: Icon positions saved and restored
-- Dynamic Widgets: Clock widget and other interactive elements
-- Icon Management: Add, remove, and reorder icons
+// Legacy draggable grid and dynamic widgets removed
 
 ### Settings
 - User Profile: Edit display name

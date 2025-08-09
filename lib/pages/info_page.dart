@@ -68,9 +68,6 @@ class _InfoPageState extends State<InfoPage> {
   }
 
   void _startTransition() async {
-    // 根據日夜調整預估時長
-    final isDay = DateTime.now().hour >= 6 && DateTime.now().hour < 18;
-    // 先淡入
     setState(() => _transitionOpacity = 1.0);
     await Future.delayed(Duration(milliseconds: _gifDurationMs - 200));
     if (!mounted) return;
@@ -164,18 +161,17 @@ class _InfoPageState extends State<InfoPage> {
         Expanded(
           child: active == _InfoSection.general
               ? Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildTitle(),
-                      const SizedBox(height: 12),
                       Expanded(child: _generalCard()),
                     ],
                   ),
                 )
               : SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -241,7 +237,10 @@ class _InfoPageState extends State<InfoPage> {
 
   Widget _topCircleTab(String label, _InfoSection section, IconData icon) {
     final bool isActive = active == section;
-    final Color base = isActive ? const Color(0xFF26C6DA) : Colors.white24;
+    final Color baseColor = isActive ? const Color(0xFF26C6DA) : Colors.white24;
+    final Color backgroundColor = isActive
+        ? const Color(0xFF26C6DA).withAlpha(38)
+        : Colors.white24.withAlpha(38); // 0.15 * 255 = 38.25 -> 38
     return InkWell(
       onTap: () => setState(() => active = section),
       child: Column(
@@ -250,16 +249,16 @@ class _InfoPageState extends State<InfoPage> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: base.withOpacity(0.15),
+              color: backgroundColor,
               shape: BoxShape.circle,
-              border: Border.all(color: base, width: 2),
+              border: Border.all(color: baseColor, width: 2),
             ),
-            child: Icon(icon, color: base, size: 18),
+            child: Icon(icon, color: baseColor, size: 16),
           ),
           const SizedBox(height: 4),
           Text(
             label,
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
         ],
       ),
@@ -273,11 +272,11 @@ class _InfoPageState extends State<InfoPage> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: Colors.white24.withOpacity(0.15),
+            color: Colors.white24.withAlpha(38), // 0.15 * 255 = 38.25 -> 38
             shape: BoxShape.circle,
             border: Border.all(color: Colors.white24, width: 2),
           ),
-          child: const Icon(Icons.add, color: Colors.white24, size: 18),
+          child: const Icon(Icons.add, color: Colors.white24, size: 16),
         ),
         const SizedBox(height: 4),
         const Text('新增', style: TextStyle(color: Colors.white70, fontSize: 12)),
@@ -337,10 +336,11 @@ class _InfoPageState extends State<InfoPage> {
     return Column(
       children: [
         _cardWrapper(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
           children: [
             // 上方膠囊選項
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _pill(
                   '緊急求助',
@@ -348,14 +348,12 @@ class _InfoPageState extends State<InfoPage> {
                   onTap: () =>
                       setState(() => _generalTab = _GeneralSubTab.emergency),
                 ),
-                const SizedBox(width: 8),
                 _pill(
                   '失物協尋',
                   active: _generalTab == _GeneralSubTab.lost,
                   onTap: () =>
                       setState(() => _generalTab = _GeneralSubTab.lost),
                 ),
-                const SizedBox(width: 8),
                 _pill(
                   '一般客服',
                   active: _generalTab == _GeneralSubTab.support,
@@ -435,7 +433,7 @@ class _InfoPageState extends State<InfoPage> {
       child: SizedBox(
         height: _inputBarHeight,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+          padding: const EdgeInsets.fromLTRB(20, 10, 16, 6),
           child: Row(
             children: [
               Expanded(
@@ -446,7 +444,7 @@ class _InfoPageState extends State<InfoPage> {
                   ),
                   height: 44,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
+                    horizontal: 16,
                     vertical: 8,
                   ),
                   child: Row(
@@ -455,6 +453,7 @@ class _InfoPageState extends State<InfoPage> {
                         child: TextField(
                           controller: _chatController,
                           style: const TextStyle(color: Colors.white),
+                          textAlignVertical: TextAlignVertical.center,
                           decoration: const InputDecoration(
                             hintText: '發送訊息',
                             hintStyle: TextStyle(color: Colors.white54),
@@ -465,6 +464,14 @@ class _InfoPageState extends State<InfoPage> {
                       IconButton(
                         onPressed: _sendGeneralMessage,
                         icon: const Icon(Icons.send, color: Colors.white70),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        iconSize: 20,
+                        alignment: Alignment.center,
+                        splashRadius: 18,
                       ),
                     ],
                   ),
