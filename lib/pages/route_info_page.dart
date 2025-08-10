@@ -138,17 +138,19 @@ class RouteInfoPage extends StatelessWidget {
     print('🚇 點擊站點: $stationName (ID: $stationId)');
     print('📡 開始呼叫台北捷運 API...');
     
+    List<Map<String, dynamic>> stationTrackData = [];
+    
     try {
       final trackData = await MetroApiService.fetchTrackInfo();
       print('✅ API 呼叫成功，共獲得 ${trackData.length} 筆資料');
       
       // 過濾出與當前站點相關的資料
-      final stationData = MetroApiService.filterByStation(trackData, stationName ?? '台北車站');
-      print('🎯 與 $stationName 相關的資料: ${stationData.length} 筆');
+      stationTrackData = MetroApiService.filterByStation(trackData, stationName ?? '台北車站');
+      print('🎯 與 $stationName 相關的資料: ${stationTrackData.length} 筆');
       
       // 詳細顯示相關資料
-      for (int i = 0; i < stationData.length; i++) {
-        final item = stationData[i];
+      for (int i = 0; i < stationTrackData.length; i++) {
+        final item = stationTrackData[i];
         print('  ${i + 1}. 車次: ${item['TrainNumber'] ?? '無'} | '
               '終點: ${item['DestinationName']} | '
               '倒數: ${item['CountDown']} | '
@@ -156,7 +158,7 @@ class RouteInfoPage extends StatelessWidget {
       }
       
       // 如果沒有找到相關資料，顯示所有資料的前5筆作為參考
-      if (stationData.isEmpty && trackData.isNotEmpty) {
+      if (stationTrackData.isEmpty && trackData.isNotEmpty) {
         print('ℹ️  未找到 $stationName 的資料，顯示前5筆作為參考:');
         final sampleData = trackData.take(5).toList();
         for (int i = 0; i < sampleData.length; i++) {
@@ -181,6 +183,7 @@ class RouteInfoPage extends StatelessWidget {
         return _StationInfoSheet(
           stationName: stationName ?? '台北車站',
           stationId: stationId ?? 'BL12R10',
+          trackData: stationTrackData, // 傳遞列車資料
         );
       },
     );
@@ -367,10 +370,12 @@ class _PinWidget extends StatelessWidget {
 class _StationInfoSheet extends StatefulWidget {
   final String stationName;
   final String stationId;
+  final List<Map<String, dynamic>> trackData; // 新增列車資料參數
   
   const _StationInfoSheet({
     this.stationName = '台北車站',
     this.stationId = 'BL12R10',
+    this.trackData = const [], // 預設為空陣列
   });
 
   @override
@@ -527,14 +532,7 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
   Widget _buildTabContent(int index) {
     switch (index) {
       case 0:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text('乘車資訊內容', style: TextStyle(color: Colors.white, fontSize: 16)),
-            SizedBox(height: 8),
-            Text('這裡可以放乘車相關說明、路線、時刻表等。', style: TextStyle(color: Colors.grey)),
-          ],
-        );
+        return _buildTrainInfo(); // 顯示列車資訊
       case 1:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -556,5 +554,149 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
       default:
         return Container();
     }
+  }
+
+  // 新增：建構列車資訊的 Widget
+  Widget _buildTrainInfo() {
+    if (widget.trackData.isEmpty) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('乘車資訊', style: TextStyle(color: Colors.white, fontSize: 16)),
+          SizedBox(height: 8),
+          Text('目前沒有列車進站資訊', style: TextStyle(color: Colors.grey)),
+        ],
+      );
+    }
+
+    // 對列車資料進行時間排序，最接近的時間在前面
+    List<Map<String, dynamic>> sortedTrackData = List.from(widget.trackData);
+    sortedTrackData.sort((a, b) {
+      String countDownA = a['CountDown']?.toString() ?? '';
+      String countDownB = b['CountDown']?.toString() ?? '';
+      
+      int secondsA = _parseCountDownToSeconds(countDownA);
+      int secondsB = _parseCountDownToSeconds(countDownB);
+      
+      return secondsA.compareTo(secondsB); // 升序排列，最小的（最接近）在前
+    });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '即時列車進站資訊',
+          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: ListView.builder(
+            itemCount: sortedTrackData.length,
+            itemBuilder: (context, index) {
+              final train = sortedTrackData[index];
+              return _buildTrainCard(train);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 新增：解析倒數時間為秒數，用於排序
+  int _parseCountDownToSeconds(String countDown) {
+    if (countDown.contains('進站')) {
+      return 0; // 進站中的列車優先級最高
+    } else if (countDown.contains(':')) {
+      // 解析 MM:SS 格式
+      final parts = countDown.split(':');
+      if (parts.length == 2) {
+        final minutes = int.tryParse(parts[0]) ?? 0;
+        final seconds = int.tryParse(parts[1]) ?? 0;
+        return minutes * 60 + seconds;
+      }
+    }
+    return 999999; // 無法解析的時間放在最後
+  }
+
+  // 新增：建構單筆列車資訊卡片
+  Widget _buildTrainCard(Map<String, dynamic> train) {
+    final countDown = train['CountDown']?.toString() ?? '';
+    final destination = train['DestinationName']?.toString() ?? '';
+    final trainNumber = train['TrainNumber']?.toString() ?? '';
+    final updateTime = train['NowDateTime']?.toString() ?? '';
+
+    // 判斷倒數時間的顏色
+    Color countDownColor = Colors.white;
+    IconData statusIcon = Icons.train;
+    
+    if (countDown.contains('進站')) {
+      countDownColor = Colors.red;
+      statusIcon = Icons.warning;
+    } else if (countDown.contains(':')) {
+      // 解析時間，如果小於1分鐘顯示橙色
+      final parts = countDown.split(':');
+      if (parts.length == 2) {
+        final minutes = int.tryParse(parts[0]) ?? 0;
+        if (minutes == 0) {
+          countDownColor = Colors.orange;
+          statusIcon = Icons.schedule;
+        } else {
+          countDownColor = Colors.green;
+          statusIcon = Icons.train;
+        }
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A3A4A),
+        borderRadius: BorderRadius.circular(8),
+        border: Border(
+          left: BorderSide(
+            color: countDownColor,
+            width: 4,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(statusIcon, color: countDownColor, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$countDown 往 $destination',
+                  style: TextStyle(
+                    color: countDownColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    if (trainNumber.isNotEmpty) ...[
+                      Text(
+                        '車次: $trainNumber',
+                        style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Text(
+                      '更新: ${updateTime.split(' ').length > 1 ? updateTime.split(' ')[1] : updateTime}',
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
