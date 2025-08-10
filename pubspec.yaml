@@ -48,6 +48,9 @@ dependencies:
   # Version management
   package_info_plus: ^8.0.2
   pub_semver: ^2.1.4
+  
+  # HTTP requests
+  http: ^1.2.0
 
 dev_dependencies:
   flutter_test:

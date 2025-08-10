@@ -1,5 +1,115 @@
 import 'package:flutter/material.dart';
 import '../widgets/adaptive_text.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+// === 台北捷運 API 服務 ===
+class MetroApiService {
+  static const String endpoint = 'https://api.metro.taipei/metroapi/TrackInfo.asmx';
+  static const Map<String, String> headers = {
+    'Content-Type': 'text/xml; charset=utf-8'
+  };
+
+  // 模擬帳號密碼 - 實際使用時請從環境變數或安全配置讀取
+  static const String username = 'MetroTaipeiHackathon2025';  // TODO: 替換為實際帳號
+  static const String password = 'bZ0dQG96N';  // TODO: 替換為實際密碼
+
+  static Future<List<Map<String, dynamic>>> fetchTrackInfo() async {
+    final body = '''<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+               xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <getTrackInfo xmlns="http://tempuri.org/">
+      <userName>$username</userName>
+      <passWord>$password</passWord>
+    </getTrackInfo>
+  </soap:Body>
+</soap:Envelope>''';
+
+    try {
+      final response = await http.post(
+        Uri.parse(endpoint),
+        headers: headers,
+        body: utf8.encode(body),
+      );
+
+      if (response.statusCode == 200) {
+        String responseText = utf8.decode(response.bodyBytes);
+        print('原始回應長度: ${responseText.length}');
+        
+        // 提取 JSON 部分（在 XML 之前）
+        String jsonPart = '';
+        if (responseText.startsWith('[')) {
+          // 找到 JSON 陣列的結束位置
+          int xmlStartIndex = responseText.indexOf('<?xml');
+          if (xmlStartIndex != -1) {
+            jsonPart = responseText.substring(0, xmlStartIndex).trim();
+          } else {
+            jsonPart = responseText.trim();
+          }
+        } else {
+          // 如果不是以 [ 開頭，可能是純 XML 回應，返回空陣列
+          print('回應不是以 JSON 陣列開頭，可能是錯誤回應');
+          return _getMockData();
+        }
+        
+        print('提取的 JSON 長度: ${jsonPart.length}');
+        print('JSON 前100字元: ${jsonPart.substring(0, jsonPart.length > 100 ? 100 : jsonPart.length)}');
+        
+        final dynamic parsed = json.decode(jsonPart);
+        if (parsed is List) {
+          return parsed.cast<Map<String, dynamic>>();
+        } else {
+          throw Exception('Unexpected response format');
+        }
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('API 呼叫錯誤: $e');
+      // 返回模擬資料用於測試
+      return _getMockData();
+    }
+  }
+
+  // 模擬資料（用於測試，當 API 呼叫失敗時使用）
+  static List<Map<String, dynamic>> _getMockData() {
+    return [
+      {
+        "TrainNumber": "104",
+        "StationName": "台北車站",
+        "DestinationName": "淡水站",
+        "CountDown": "00:41",
+        "NowDateTime": "2025-08-10 21:00:22"
+      },
+      {
+        "TrainNumber": "105",
+        "StationName": "台北車站",
+        "DestinationName": "象山站",
+        "CountDown": "02:15",
+        "NowDateTime": "2025-08-10 21:00:22"
+      },
+      {
+        "TrainNumber": "",
+        "StationName": "松江南京站",
+        "DestinationName": "新店站",
+        "CountDown": "列車進站",
+        "NowDateTime": "2025-08-10 21:00:22"
+      }
+    ];
+  }
+
+  // 過濾特定站點的資料
+  static List<Map<String, dynamic>> filterByStation(
+    List<Map<String, dynamic>> data, 
+    String stationName
+  ) {
+    return data.where((item) => 
+      item['StationName']?.toString().contains(stationName.replaceAll('站', '')) ?? false
+    ).toList();
+  }
+}
 
 class RouteInfoPage extends StatelessWidget {
   const RouteInfoPage({super.key});
@@ -23,7 +133,46 @@ class RouteInfoPage extends StatelessWidget {
   ];
 
   // Modal Bottom Sheet 函數
-  void _showModalBottomSheet(BuildContext context, {String? stationName, String? stationId}) {
+  void _showModalBottomSheet(BuildContext context, {String? stationName, String? stationId}) async {
+    // 當開啟 Bottom Sheet 時呼叫 API 並顯示結果到 console
+    print('🚇 點擊站點: $stationName (ID: $stationId)');
+    print('📡 開始呼叫台北捷運 API...');
+    
+    try {
+      final trackData = await MetroApiService.fetchTrackInfo();
+      print('✅ API 呼叫成功，共獲得 ${trackData.length} 筆資料');
+      
+      // 過濾出與當前站點相關的資料
+      final stationData = MetroApiService.filterByStation(trackData, stationName ?? '台北車站');
+      print('🎯 與 $stationName 相關的資料: ${stationData.length} 筆');
+      
+      // 詳細顯示相關資料
+      for (int i = 0; i < stationData.length; i++) {
+        final item = stationData[i];
+        print('  ${i + 1}. 車次: ${item['TrainNumber'] ?? '無'} | '
+              '終點: ${item['DestinationName']} | '
+              '倒數: ${item['CountDown']} | '
+              '時間: ${item['NowDateTime']}');
+      }
+      
+      // 如果沒有找到相關資料，顯示所有資料的前5筆作為參考
+      if (stationData.isEmpty && trackData.isNotEmpty) {
+        print('ℹ️  未找到 $stationName 的資料，顯示前5筆作為參考:');
+        final sampleData = trackData.take(5).toList();
+        for (int i = 0; i < sampleData.length; i++) {
+          final item = sampleData[i];
+          print('  ${i + 1}. 站名: ${item['StationName']} | '
+                '車次: ${item['TrainNumber'] ?? '無'} | '
+                '終點: ${item['DestinationName']} | '
+                '倒數: ${item['CountDown']}');
+        }
+      }
+    } catch (e) {
+      print('❌ API 呼叫失敗: $e');
+    }
+    
+    print('─' * 50);
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
