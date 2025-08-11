@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../widgets/adaptive_text.dart';
+// import '../widgets/adaptive_text.dart';
 
 class CustomizeFunctionsPage extends StatefulWidget {
   final List<FunctionItem> selectedFunctions;
@@ -504,19 +504,16 @@ class FunctionItem {
   });
 
   Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'icon': icon.codePoint,
-      'category': category,
-    };
+    // 不再儲存 icon 的 codePoint，避免動態 IconData 造成 tree-shake-icons 失敗
+    return {'id': id, 'name': name, 'category': category};
   }
 
   factory FunctionItem.fromJson(Map<String, dynamic> json) {
+    final String id = json['id'];
     return FunctionItem(
-      id: json['id'],
+      id: id,
       name: json['name'],
-      icon: IconData(json['icon'], fontFamily: 'MaterialIcons'),
+      icon: _FunctionIconRegistry.iconFor(id),
       category: json['category'],
     );
   }
@@ -529,4 +526,30 @@ class FunctionItem {
 
   @override
   int get hashCode => id.hashCode;
+}
+
+// 集中定義功能對應的 Icon，使用常量，便於 tree-shake-icons 正常工作
+class _FunctionIconRegistry {
+  static const Map<String, IconData> _idToIcon = {
+    'route_info': Icons.route,
+    'schedule': Icons.schedule,
+    'station_info': Icons.location_on,
+    'fare_info': Icons.attach_money,
+    'service_status': Icons.info,
+    'news': Icons.newspaper,
+    'member_card': Icons.credit_card,
+    'points': Icons.stars,
+    'benefits': Icons.local_offer,
+    'history': Icons.history,
+    'settings': Icons.settings,
+    'profile': Icons.person,
+    'lost_found': Icons.search,
+    'emergency': Icons.emergency,
+    'accessibility': Icons.accessibility,
+    'feedback': Icons.feedback,
+  };
+
+  static IconData iconFor(String id) {
+    return _idToIcon[id] ?? Icons.widgets_outlined;
+  }
 }
