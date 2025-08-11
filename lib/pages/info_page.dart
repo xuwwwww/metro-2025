@@ -28,29 +28,20 @@ class _InfoPageState extends State<InfoPage> {
   double _transitionOpacity = 0.0; // 從0淡入
   int _gifDurationMs = 2000; // 可依不同檔案調整
 
-  // 一般分頁子選單
-  _GeneralSubTab _generalTab = _GeneralSubTab.emergency;
+  // 一般分頁子選單（預設一般客服）
+  _GeneralSubTab _generalTab = _GeneralSubTab.support;
 
   final TextEditingController _chatController = TextEditingController();
-  final List<Map<String, String>> _emergencyMsgs = [];
-  final List<Map<String, String>> _lostMsgs = [];
-  final List<Map<String, String>> _supportMsgs = [];
+  // 一般分頁的共用對話訊息（三個選項共用同一串）
+  final List<Map<String, String>> _generalMsgs = [];
 
   @override
   void initState() {
     super.initState();
     _loadPermissionsIfLoggedIn();
     _startTransition();
-    // 初始化展示訊息
-    _emergencyMsgs.addAll([
-      {'from': '客服', 'text': '您好，這裡是緊急求助。請簡述位置與狀況。'},
-    ]);
-    _lostMsgs.addAll([
-      {'from': '客服', 'text': '請提供遺失物品、時間與車站，我們協助您查詢。'},
-    ]);
-    _supportMsgs.addAll([
-      {'from': '客服', 'text': '您好，請問需要什麼協助？'},
-    ]);
+    // 預設顯示一般客服的問候
+    _generalMsgs.add({'from': '一般客服BOT', 'text': '您好，請問需要什麼協助？'});
   }
 
   Future<void> _loadPermissionsIfLoggedIn() async {
@@ -345,24 +336,59 @@ class _InfoPageState extends State<InfoPage> {
                 _pill(
                   '緊急求助',
                   active: _generalTab == _GeneralSubTab.emergency,
-                  onTap: () =>
-                      setState(() => _generalTab = _GeneralSubTab.emergency),
+                  onTap: () => _switchGeneralTab(_GeneralSubTab.emergency),
                 ),
                 _pill(
                   '失物協尋',
                   active: _generalTab == _GeneralSubTab.lost,
-                  onTap: () =>
-                      setState(() => _generalTab = _GeneralSubTab.lost),
+                  onTap: () => _switchGeneralTab(_GeneralSubTab.lost),
                 ),
                 _pill(
                   '一般客服',
                   active: _generalTab == _GeneralSubTab.support,
-                  onTap: () =>
-                      setState(() => _generalTab = _GeneralSubTab.support),
+                  onTap: () => _switchGeneralTab(_GeneralSubTab.support),
                 ),
               ],
             ),
             const SizedBox(height: 12),
+            // 顯示目前對話對象
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF26C6DA).withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFF26C6DA),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.support_agent,
+                        color: Color(0xFF26C6DA),
+                        size: 14,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '正在與：${_tabLabel(_generalTab)} 對話',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -374,12 +400,7 @@ class _InfoPageState extends State<InfoPage> {
 
   Widget _buildGeneralChatList() {
     // 顯示聊天訊息區域 + 送出列
-    final List<Map<String, String>> msgs =
-        _generalTab == _GeneralSubTab.emergency
-        ? _emergencyMsgs
-        : _generalTab == _GeneralSubTab.lost
-        ? _lostMsgs
-        : _supportMsgs;
+    final List<Map<String, String>> msgs = _generalMsgs;
 
     return Container(
       decoration: BoxDecoration(
@@ -497,15 +518,44 @@ class _InfoPageState extends State<InfoPage> {
   void _sendGeneralMessage() {
     final txt = _chatController.text.trim();
     if (txt.isEmpty) return;
-    final list = _generalTab == _GeneralSubTab.emergency
-        ? _emergencyMsgs
-        : _generalTab == _GeneralSubTab.lost
-        ? _lostMsgs
-        : _supportMsgs;
     setState(() {
-      list.add({'from': 'You', 'text': txt});
+      _generalMsgs.add({'from': 'You', 'text': txt});
       _chatController.clear();
     });
+  }
+
+  // 切換一般分頁的對話對象（三選一）
+  void _switchGeneralTab(_GeneralSubTab tab) {
+    if (_generalTab == tab) return;
+    setState(() {
+      _generalTab = tab;
+      // 插入系統/對象提示訊息，保持共用對話串
+      final label = _tabLabel(tab);
+      final greet = _tabGreeting(tab);
+      _generalMsgs.add({'from': '${label}BOT', 'text': greet});
+    });
+  }
+
+  String _tabLabel(_GeneralSubTab tab) {
+    switch (tab) {
+      case _GeneralSubTab.emergency:
+        return '緊急求助';
+      case _GeneralSubTab.lost:
+        return '失物協尋';
+      case _GeneralSubTab.support:
+        return '一般客服';
+    }
+  }
+
+  String _tabGreeting(_GeneralSubTab tab) {
+    switch (tab) {
+      case _GeneralSubTab.emergency:
+        return '您好，這裡是緊急求助。請簡述位置與狀況。';
+      case _GeneralSubTab.lost:
+        return '請提供遺失物品、時間與車站，我們協助您查詢。';
+      case _GeneralSubTab.support:
+        return '您好，請問需要什麼協助？';
+    }
   }
 
   Widget _rideshareCard() {
