@@ -2,12 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../widgets/adaptive_text.dart';
+// import '../widgets/adaptive_text.dart'; // unused
 import '../utils/global_login_state.dart';
 import 'chat_page.dart';
 import 'customize_functions_page.dart';
 import 'dart:async'; // Added for Timer
 import 'edit_favorite_stations_page.dart'; // Added for EditFavoriteStationsPage
+import 'route_info_page.dart'
+    show MetroApiService; // Reuse API service for track info
+
+// 單筆站點到站資訊（本地倒數用）
+class StationArrival {
+  StationArrival({required this.destination, required this.secondsLeft});
+  final String destination;
+  int secondsLeft;
+}
 
 class HomePage extends StatefulWidget {
   HomePage({Key? key}) : super(key: key);
@@ -22,38 +31,42 @@ class _HomePageState extends State<HomePage> {
   // 已選擇的功能
   List<FunctionItem> selectedFunctions = [];
 
-  // 常用站點數據
+  // 常用站點數據（在 fetch 前顯示 --:--）
   List<Map<String, dynamic>> frequentStations = [
     {
       'name': '台北車站',
-      'timeToDirection1': '2分 30秒',
-      'timeToDirection2': '4分 15秒',
-      'destination1': '淡水',
-      'destination2': '南港',
+      'timeToDirection1': '--:--',
+      'timeToDirection2': '--:--',
+      'destination1': '',
+      'destination2': '',
     },
     {
       'name': '西門',
-      'timeToDirection1': '5分 15秒',
-      'timeToDirection2': '3分 45秒',
-      'destination1': '板橋',
-      'destination2': '淡水',
+      'timeToDirection1': '--:--',
+      'timeToDirection2': '--:--',
+      'destination1': '',
+      'destination2': '',
     },
   ];
   // 使用者自訂常用站點名單（僅名稱，用於編輯頁面）
   List<String> favoriteStationNames = ['台北車站', '西門'];
 
-  // 最近的站點數據
-  Map<String, dynamic> nearestStation = {
-    'name': '忠孝復興站',
-    'timeToDirection1': '1分 45秒',
-    'timeToDirection2': '3分 20秒',
-    'destination1': '南港',
-    'destination2': '淡水',
-  };
+  // 最近的站點：已移除（僅保留常用站點）
 
   // 模擬到站時間計時器
   Timer? _timer;
   int _currentSecond = 0;
+  // 30秒輪詢計時器
+  Timer? _pollTimer;
+  // 是否已載入進站資料（可用於日後顯示loading狀態）
+  // ignore: unused_field
+  bool _arrivalsLoaded = false;
+  // 以站名為鍵，保存兩個方向的倒數（秒）與目的地
+  final Map<String, List<StationArrival>> stationArrivals = {};
+  // 最近一次抓取的時間戳，用於跨頁計算（毫秒）
+  // ignore: unused_field
+  int _lastFetchMs = 0;
+  bool _isFetching = false;
 
   // 最新消息數據
   List<Map<String, String>> newsItems = [
@@ -79,17 +92,24 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _loadSelectedFunctions();
     _loadDefaultFunctions();
-    _startTimer();
+    _startCountdownTimer();
+    _startPollingArrivals();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _pollTimer?.cancel();
     super.dispose();
   }
 
-  // 開始計時器
-  void _startTimer() {
+  //每次抓取後會把「抓取時間戳 fetchedAt」與各站兩方向的秒數和目的地，
+  //序列化成 JSON 存到 SharedPreferences 鍵 latest_arrivals。
+  //其他頁面可取出 fetchedAt 與各站的 seconds，用「現在時間 - fetchedAt」
+  //推算剩餘秒數（小於等於 0 視為已進站）
+
+  // 每秒倒數計時器（本地遞減，不打API）
+  void _startCountdownTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       setState(() {
         _currentSecond = (_currentSecond + 1) % 60;
@@ -98,48 +118,171 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  // 更新站點時間
-  void _updateStationTimes() {
-    // 模擬時間變化
-    setState(() {
-      // 更新常用站點時間
-      for (int i = 0; i < frequentStations.length; i++) {
-        int baseMinutes1 = i == 0 ? 2 : 5;
-        int baseSeconds1 = i == 0 ? 30 : 15;
-        int adjustedSeconds1 = (baseSeconds1 + _currentSecond) % 60;
-        int adjustedMinutes1 =
-            baseMinutes1 + ((baseSeconds1 + _currentSecond) ~/ 60);
+  // 每30秒抓取一次最新進站資料（不阻塞首頁顯示）
+  void _startPollingArrivals() {
+    // 先立即抓一次，之後每30秒再抓
+    _fetchArrivals();
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _fetchArrivals(),
+    );
+  }
 
-        int baseMinutes2 = i == 0 ? 4 : 3;
-        int baseSeconds2 = i == 0 ? 15 : 45;
-        int adjustedSeconds2 = (baseSeconds2 + _currentSecond) % 60;
-        int adjustedMinutes2 =
-            baseMinutes2 + ((baseSeconds2 + _currentSecond) ~/ 60);
+  // 取得所有站點的最新列車資訊並更新常用站點的兩個方向
+  Future<void> _fetchArrivals() async {
+    try {
+      if (_isFetching) return;
+      setState(() => _isFetching = true);
+      final allTrackData = await MetroApiService.fetchTrackInfo();
 
-        frequentStations[i]['timeToDirection1'] =
-            '${adjustedMinutes1}分 ${adjustedSeconds1.toString().padLeft(2, '0')}秒';
-        frequentStations[i]['timeToDirection2'] =
-            '${adjustedMinutes2}分 ${adjustedSeconds2.toString().padLeft(2, '0')}秒';
+      // 針對目前顯示在首頁的常用站點，更新各站兩個最近到站資訊
+      final Map<String, List<StationArrival>> nextArrivalsByStation = {};
+      for (final station in frequentStations) {
+        final String stationName = station['name']?.toString() ?? '';
+        if (stationName.isEmpty) continue;
+
+        final filtered = MetroApiService.filterByStation(
+          allTrackData,
+          stationName,
+        );
+        // 轉換為可倒數的結構
+        final List<StationArrival> arrivals = filtered
+            .map((e) {
+              final destination = e['DestinationName']?.toString() ?? '';
+              final countDown = e['CountDown']?.toString() ?? '';
+              final seconds = _parseCountDownToSeconds(countDown);
+              if (seconds == null) return null;
+              return StationArrival(
+                destination: destination,
+                secondsLeft: seconds,
+              );
+            })
+            .whereType<StationArrival>()
+            .toList();
+
+        // 以秒數由小到大排序，取前兩筆
+        arrivals.sort((a, b) => a.secondsLeft.compareTo(b.secondsLeft));
+        nextArrivalsByStation[stationName] = arrivals.take(2).toList();
       }
 
-      // 更新最近站點時間
-      int baseMinutes1 = 1;
-      int baseSeconds1 = 45;
-      int adjustedSeconds1 = (baseSeconds1 + _currentSecond) % 60;
-      int adjustedMinutes1 =
-          baseMinutes1 + ((baseSeconds1 + _currentSecond) ~/ 60);
+      // 套用至畫面資料
+      final fetchMs = DateTime.now().millisecondsSinceEpoch;
+      setState(() {
+        stationArrivals
+          ..clear()
+          ..addAll(nextArrivalsByStation);
+        _applyArrivalsToFrequentStations();
+        _arrivalsLoaded = true;
+        _lastFetchMs = fetchMs;
+        _isFetching = false;
+      });
+      await _persistArrivals(nextArrivalsByStation, fetchMs);
+    } catch (e) {
+      // 失敗就保持原樣，下次輪詢再試
+      debugPrint('抓取進站資料失敗: $e');
+      if (mounted) setState(() => _isFetching = false);
+    }
+  }
 
-      int baseMinutes2 = 3;
-      int baseSeconds2 = 20;
-      int adjustedSeconds2 = (baseSeconds2 + _currentSecond) % 60;
-      int adjustedMinutes2 =
-          baseMinutes2 + ((baseSeconds2 + _currentSecond) ~/ 60);
+  Future<void> _persistArrivals(
+    Map<String, List<StationArrival>> byStation,
+    int fetchMs,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final Map<String, dynamic> payload = {
+      'fetchedAt': fetchMs,
+      'stations': byStation.map(
+        (k, v) => MapEntry(
+          k,
+          v
+              .map(
+                (a) => {'destination': a.destination, 'seconds': a.secondsLeft},
+              )
+              .toList(),
+        ),
+      ),
+    };
+    await prefs.setString('latest_arrivals', jsonEncode(payload));
+  }
 
-      nearestStation['timeToDirection1'] =
-          '${adjustedMinutes1}分 ${adjustedSeconds1.toString().padLeft(2, '0')}秒';
-      nearestStation['timeToDirection2'] =
-          '${adjustedMinutes2}分 ${adjustedSeconds2.toString().padLeft(2, '0')}秒';
+  // 更新站點時間：每秒遞減現有倒數，並回寫到UI字串
+  void _updateStationTimes() {
+    setState(() {
+      // 常用站：使用 stationArrivals 的資料遞減
+      for (int i = 0; i < frequentStations.length; i++) {
+        final String stationName =
+            frequentStations[i]['name']?.toString() ?? '';
+        final arrivals = stationArrivals[stationName];
+        if (arrivals == null || arrivals.isEmpty) continue;
+
+        // 逐一遞減前兩筆
+        for (int j = 0; j < arrivals.length && j < 2; j++) {
+          final a = arrivals[j];
+          if (a.secondsLeft > 0) {
+            a.secondsLeft -= 1;
+          }
+          final formatted = a.secondsLeft <= 0
+              ? '進站'
+              : _formatSeconds(a.secondsLeft);
+          if (j == 0) {
+            frequentStations[i]['destination1'] = a.destination;
+            frequentStations[i]['timeToDirection1'] = formatted;
+          } else if (j == 1) {
+            frequentStations[i]['destination2'] = a.destination;
+            frequentStations[i]['timeToDirection2'] = formatted;
+          }
+        }
+      }
+
+      // 已移除最近站點區塊，無需更新
     });
+  }
+
+  // 將最新抓取到的資料套用到 frequentStations 顯示
+  void _applyArrivalsToFrequentStations() {
+    for (int i = 0; i < frequentStations.length; i++) {
+      final name = frequentStations[i]['name']?.toString() ?? '';
+      final arrivals = stationArrivals[name] ?? const [];
+      if (arrivals.isEmpty) continue;
+
+      final first = arrivals.isNotEmpty ? arrivals[0] : null;
+      final second = arrivals.length > 1 ? arrivals[1] : null;
+
+      if (first != null) {
+        frequentStations[i]['destination1'] = first.destination;
+        frequentStations[i]['timeToDirection1'] = first.secondsLeft <= 0
+            ? '進站'
+            : _formatSeconds(first.secondsLeft);
+      }
+      if (second != null) {
+        frequentStations[i]['destination2'] = second.destination;
+        frequentStations[i]['timeToDirection2'] = second.secondsLeft <= 0
+            ? '進站'
+            : _formatSeconds(second.secondsLeft);
+      }
+    }
+  }
+
+  // 解析 API 提供的 CountDown 字串為秒數
+  // 支援格式：'MM:SS' 或 包含 '進站' -> 視為 0 秒
+  int? _parseCountDownToSeconds(String countDown) {
+    if (countDown.contains('進站')) return 0;
+    if (countDown.contains(':')) {
+      final parts = countDown.split(':');
+      if (parts.length == 2) {
+        final minutes = int.tryParse(parts[0]) ?? 0;
+        final seconds = int.tryParse(parts[1]) ?? 0;
+        return minutes * 60 + seconds;
+      }
+    }
+    return null; // 無法解析則忽略
+  }
+
+  String _formatSeconds(int seconds) {
+    if (seconds <= 0) return '進站';
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '${m}分 ${s.toString().padLeft(2, '0')}秒';
   }
 
   // 載入已選擇的功能
@@ -177,10 +320,10 @@ class _HomePageState extends State<HomePage> {
         (e) => e['name'] == name,
         orElse: () => {
           'name': name,
-          'timeToDirection1': '2分 30秒',
-          'timeToDirection2': '4分 15秒',
-          'destination1': '往A',
-          'destination2': '往B',
+          'timeToDirection1': '--:--',
+          'timeToDirection2': '--:--',
+          'destination1': '',
+          'destination2': '',
         },
       );
       rebuilt.add({...existing});
@@ -298,12 +441,30 @@ class _HomePageState extends State<HomePage> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            TextButton(
-              onPressed: _openEditFavoriteStations,
-              child: const Text(
-                '編輯',
-                style: TextStyle(color: Color(0xFF26C6DA)),
-              ),
+            Row(
+              children: [
+                IconButton(
+                  onPressed: _isFetching ? null : _onManualRefresh,
+                  icon: _isFetching
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF26C6DA),
+                          ),
+                        )
+                      : const Icon(Icons.refresh, color: Color(0xFF26C6DA)),
+                  tooltip: '刷新',
+                ),
+                TextButton(
+                  onPressed: _openEditFavoriteStations,
+                  child: const Text(
+                    '編輯',
+                    style: TextStyle(color: Color(0xFF26C6DA)),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -363,7 +524,7 @@ class _HomePageState extends State<HomePage> {
 
                     // 右側：兩方向進站資訊（擴大寬度）
                     Expanded(
-                      flex: 1,
+                      flex: 2,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -383,96 +544,6 @@ class _HomePageState extends State<HomePage> {
                 ),
               );
             }),
-            // 最近的站點標題
-            const SizedBox(height: 8),
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '最近的站點',
-                style: TextStyle(
-                  color: Color(0xFF114D4D),
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            // 最近的站點
-            Container(
-              margin: const EdgeInsets.only(top: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF22303C),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF114D4D), width: 1),
-              ),
-              child: Row(
-                children: [
-                  // 左側：車站圖標和名稱（縮小寬度）
-                  Expanded(
-                    flex: 1,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF3A4A5A),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Icon(
-                                Icons.train,
-                                color: Color(0xFF26C6DA),
-                                size: 16,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              nearestStation['name']!,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        // 已將進站時間移至右側顯示
-                      ],
-                    ),
-                  ),
-
-                  // 右側：兩方向進站資訊（擴大寬度）
-                  Expanded(
-                    flex: 1,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: _buildArrivalChip(
-                            '${nearestStation['timeToDirection1']!} | 往 ${nearestStation['destination1']}',
-                            const Color(0xFF26C6DA),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: _buildArrivalChip(
-                            '${nearestStation['timeToDirection2']!} | 往 ${nearestStation['destination2']}',
-                            const Color(0xFFFFB74D),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ],
@@ -701,6 +772,11 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+  }
+
+  // 手動刷新按鈕
+  Future<void> _onManualRefresh() async {
+    await _fetchArrivals();
   }
 
   // 處理功能點擊
@@ -946,6 +1022,8 @@ class _HomePageState extends State<HomePage> {
             favoriteStationNames = list;
             _saveFavoriteStations();
             _rebuildFrequentStationsFromNames();
+            // 使用者確認後立即抓取新站點資料
+            _fetchArrivals();
           },
         ),
       ),
