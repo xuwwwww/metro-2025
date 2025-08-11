@@ -16,6 +16,8 @@ enum _InfoSection { general, rideshare, chat, music }
 enum _GeneralSubTab { emergency, lost, support }
 
 class _InfoPageState extends State<InfoPage> {
+  static const double _inputBarHeight = 64; // 輸入列固定高度
+  static const double _gapToNav = 10; // 與底部 navigation bar 的距離
   _InfoSection active = _InfoSection.general;
   String search = '';
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -24,7 +26,7 @@ class _InfoPageState extends State<InfoPage> {
   // 進入資訊頁的轉場
   bool _showTransition = true;
   double _transitionOpacity = 0.0; // 從0淡入
-  int _gifDurationMs = 1800; // 可依不同檔案調整
+  int _gifDurationMs = 2000; // 可依不同檔案調整
 
   // 一般分頁子選單
   _GeneralSubTab _generalTab = _GeneralSubTab.emergency;
@@ -52,8 +54,9 @@ class _InfoPageState extends State<InfoPage> {
   }
 
   Future<void> _loadPermissionsIfLoggedIn() async {
-    if (!GlobalLoginState.isLoggedIn || GlobalLoginState.currentUid == null)
+    if (!GlobalLoginState.isLoggedIn || GlobalLoginState.currentUid == null) {
       return;
+    }
     try {
       final doc = await _firestore
           .collection('users')
@@ -65,12 +68,8 @@ class _InfoPageState extends State<InfoPage> {
   }
 
   void _startTransition() async {
-    // 根據日夜調整預估時長
-    final isDay = DateTime.now().hour >= 6 && DateTime.now().hour < 18;
-    _gifDurationMs = isDay ? 1800 : 1800; // 需要時可調整
-    // 先淡入
     setState(() => _transitionOpacity = 1.0);
-    await Future.delayed(Duration(milliseconds: _gifDurationMs - 400));
+    await Future.delayed(Duration(milliseconds: _gifDurationMs - 200));
     if (!mounted) return;
     // 再淡出
     setState(() => _transitionOpacity = 0.0);
@@ -158,39 +157,57 @@ class _InfoPageState extends State<InfoPage> {
           ),
         ),
 
-        // 主體（不再有左側垂直導航）
+        // 主體（一般分頁改為撐滿，其它維持可捲動）
         Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return Padding(
-                padding: const EdgeInsets.only(
-                  left: 16,
-                  right: 16,
-                  top: 16,
-                  bottom: 0,
-                ),
-                child: SizedBox(
-                  height: constraints.maxHeight,
+          child: active == _InfoSection.general
+              ? Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildTitle(),
+                      Expanded(child: _generalCard()),
+                    ],
+                  ),
+                )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildTitle(),
                       const SizedBox(height: 12),
-                      Expanded(child: _buildContentBody()),
+                      _buildContentCard(),
                     ],
                   ),
                 ),
-              );
-            },
-          ),
         ),
       ],
     );
+    final double sysBottom = MediaQuery.of(context).padding.bottom;
+    final double gap = sysBottom + _gapToNav;
 
     return SafeArea(
+      top: true,
+      bottom: false,
       child: Stack(
         children: [
-          content,
+          // 一般分頁僅保留 gap，其它分頁保留輸入列高度 + gap
+          Padding(
+            padding: EdgeInsets.only(
+              bottom: active == _InfoSection.general
+                  ? gap
+                  : (_inputBarHeight + gap),
+            ),
+            child: content,
+          ),
+          if (active == _InfoSection.general)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: gap,
+              child: _buildGeneralInputRow(),
+            ),
           if (_showTransition)
             IgnorePointer(
               child: AnimatedOpacity(
@@ -220,7 +237,10 @@ class _InfoPageState extends State<InfoPage> {
 
   Widget _topCircleTab(String label, _InfoSection section, IconData icon) {
     final bool isActive = active == section;
-    final Color base = isActive ? const Color(0xFF26C6DA) : Colors.white24;
+    final Color baseColor = isActive ? const Color(0xFF26C6DA) : Colors.white24;
+    final Color backgroundColor = isActive
+        ? const Color(0xFF26C6DA).withAlpha(38)
+        : Colors.white24.withAlpha(38); // 0.15 * 255 = 38.25 -> 38
     return InkWell(
       onTap: () => setState(() => active = section),
       child: Column(
@@ -229,16 +249,16 @@ class _InfoPageState extends State<InfoPage> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: base.withOpacity(0.15),
+              color: backgroundColor,
               shape: BoxShape.circle,
-              border: Border.all(color: base, width: 2),
+              border: Border.all(color: baseColor, width: 2),
             ),
-            child: Icon(icon, color: base, size: 18),
+            child: Icon(icon, color: baseColor, size: 16),
           ),
           const SizedBox(height: 4),
           Text(
             label,
-            style: const TextStyle(color: Colors.white70, fontSize: 12),
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
         ],
       ),
@@ -252,11 +272,11 @@ class _InfoPageState extends State<InfoPage> {
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: Colors.white24.withOpacity(0.15),
+            color: Colors.white24.withAlpha(38), // 0.15 * 255 = 38.25 -> 38
             shape: BoxShape.circle,
             border: Border.all(color: Colors.white24, width: 2),
           ),
-          child: const Icon(Icons.add, color: Colors.white24, size: 18),
+          child: const Icon(Icons.add, color: Colors.white24, size: 16),
         ),
         const SizedBox(height: 4),
         const Text('新增', style: TextStyle(color: Colors.white70, fontSize: 12)),
@@ -268,14 +288,7 @@ class _InfoPageState extends State<InfoPage> {
   Widget _buildTitle() {
     switch (active) {
       case _InfoSection.general:
-        return const Text(
-          '歡迎來到 MetroTogether',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        );
+        return const SizedBox.shrink();
       case _InfoSection.rideshare:
         return const Text(
           '共乘板塊',
@@ -306,10 +319,10 @@ class _InfoPageState extends State<InfoPage> {
     }
   }
 
-  Widget _buildContentBody() {
+  Widget _buildContentCard() {
     switch (active) {
       case _InfoSection.general:
-        return _generalBody();
+        return _generalCard();
       case _InfoSection.rideshare:
         return _rideshareCard();
       case _InfoSection.chat:
@@ -319,50 +332,48 @@ class _InfoPageState extends State<InfoPage> {
     }
   }
 
-  Widget _generalBody() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF3A4A5A),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              _pill(
-                '緊急求助',
-                active: _generalTab == _GeneralSubTab.emergency,
-                onTap: () =>
-                    setState(() => _generalTab = _GeneralSubTab.emergency),
-              ),
-              const SizedBox(width: 8),
-              _pill(
-                '失物協尋',
-                active: _generalTab == _GeneralSubTab.lost,
-                onTap: () => setState(() => _generalTab = _GeneralSubTab.lost),
-              ),
-              const SizedBox(width: 8),
-              _pill(
-                '一般客服',
-                active: _generalTab == _GeneralSubTab.support,
-                onTap: () =>
-                    setState(() => _generalTab = _GeneralSubTab.support),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // 聊天內容填滿卡片高度
-          Expanded(child: _buildGeneralChatList()),
-          // 貼齊底部 SafeArea 輸入列
-          _buildGeneralInputRow(),
-        ],
-      ),
+  Widget _generalCard() {
+    return Column(
+      children: [
+        _cardWrapper(
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+          children: [
+            // 上方膠囊選項
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _pill(
+                  '緊急求助',
+                  active: _generalTab == _GeneralSubTab.emergency,
+                  onTap: () =>
+                      setState(() => _generalTab = _GeneralSubTab.emergency),
+                ),
+                _pill(
+                  '失物協尋',
+                  active: _generalTab == _GeneralSubTab.lost,
+                  onTap: () =>
+                      setState(() => _generalTab = _GeneralSubTab.lost),
+                ),
+                _pill(
+                  '一般客服',
+                  active: _generalTab == _GeneralSubTab.support,
+                  onTap: () =>
+                      setState(() => _generalTab = _GeneralSubTab.support),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // 用 Expanded 讓聊天區塊吃掉剩餘空間
+        Expanded(child: _buildGeneralChatList()),
+      ],
     );
   }
 
   Widget _buildGeneralChatList() {
+    // 顯示聊天訊息區域 + 送出列
     final List<Map<String, String>> msgs =
         _generalTab == _GeneralSubTab.emergency
         ? _emergencyMsgs
@@ -375,8 +386,16 @@ class _InfoPageState extends State<InfoPage> {
         color: const Color(0xFF2A3A4A),
         borderRadius: BorderRadius.circular(12),
       ),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(8),
       child: ListView.builder(
+        padding: EdgeInsets.only(
+          // 讓清單剛好到輸入列上緣，再加一點視覺緩衝
+          bottom:
+              _inputBarHeight +
+              MediaQuery.of(context).padding.bottom +
+              _gapToNav +
+              6,
+        ),
         itemCount: msgs.length,
         itemBuilder: (context, index) {
           final m = msgs[index];
@@ -384,8 +403,8 @@ class _InfoPageState extends State<InfoPage> {
           return Align(
             alignment: isYou ? Alignment.centerRight : Alignment.centerLeft,
             child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              padding: const EdgeInsets.all(10),
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.all(8),
               constraints: const BoxConstraints(maxWidth: 240),
               decoration: BoxDecoration(
                 color: isYou
@@ -408,50 +427,68 @@ class _InfoPageState extends State<InfoPage> {
 
   Widget _buildGeneralInputRow() {
     return SafeArea(
-      bottom: true,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 10),
-        child: Row(
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E2A33),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _chatController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
-                          hintText: '發送訊息',
-                          hintStyle: TextStyle(color: Colors.white54),
-                          border: InputBorder.none,
+      top: false,
+      bottom: false,
+      minimum: EdgeInsets.zero,
+      child: SizedBox(
+        height: _inputBarHeight,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 16, 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E2A33),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  height: 44,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _chatController,
+                          style: const TextStyle(color: Colors.white),
+                          textAlignVertical: TextAlignVertical.center,
+                          decoration: const InputDecoration(
+                            hintText: '發送訊息',
+                            hintStyle: TextStyle(color: Colors.white54),
+                            border: InputBorder.none,
+                          ),
                         ),
                       ),
-                    ),
-                    IconButton(
-                      onPressed: _sendGeneralMessage,
-                      icon: const Icon(Icons.send, color: Colors.white70),
-                    ),
-                  ],
+                      IconButton(
+                        onPressed: _sendGeneralMessage,
+                        icon: const Icon(Icons.send, color: Colors.white70),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        iconSize: 20,
+                        alignment: Alignment.center,
+                        splashRadius: 18,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E2A33),
-                borderRadius: BorderRadius.circular(20),
+              const SizedBox(width: 8),
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E2A33),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(Icons.mic, color: Colors.white60, size: 18),
               ),
-              child: const Icon(Icons.mic, color: Colors.white60, size: 20),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
