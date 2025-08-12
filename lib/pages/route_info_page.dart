@@ -1,21 +1,22 @@
 import 'package:flutter/material.dart';
-import '../widgets/adaptive_text.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 // === 台北捷運 API 服務 ===
 class MetroApiService {
-  static const String endpoint = 'https://api.metro.taipei/metroapi/TrackInfo.asmx';
+  static const String endpoint =
+      'https://api.metro.taipei/metroapi/TrackInfo.asmx';
   static const Map<String, String> headers = {
-    'Content-Type': 'text/xml; charset=utf-8'
+    'Content-Type': 'text/xml; charset=utf-8',
   };
 
   // 模擬帳號密碼 - 實際使用時請從環境變數或安全配置讀取
-  static const String username = 'MetroTaipeiHackathon2025';  // TODO: 替換為實際帳號
-  static const String password = 'bZ0dQG96N';  // TODO: 替換為實際密碼
+  static const String username = 'MetroTaipeiHackathon2025'; // TODO: 替換為實際帳號
+  static const String password = 'bZ0dQG96N'; // TODO: 替換為實際密碼
 
   static Future<List<Map<String, dynamic>>> fetchTrackInfo() async {
-    final body = '''<?xml version="1.0" encoding="utf-8"?>
+    final body =
+        '''<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                xmlns:xsd="http://www.w3.org/2001/XMLSchema"
                xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
@@ -37,7 +38,7 @@ class MetroApiService {
       if (response.statusCode == 200) {
         String responseText = utf8.decode(response.bodyBytes);
         print('原始回應長度: ${responseText.length}');
-        
+
         // 提取 JSON 部分（在 XML 之前）
         String jsonPart = '';
         if (responseText.startsWith('[')) {
@@ -53,10 +54,12 @@ class MetroApiService {
           print('回應不是以 JSON 陣列開頭，可能是錯誤回應');
           return _getMockData();
         }
-        
+
         print('提取的 JSON 長度: ${jsonPart.length}');
-        print('JSON 前100字元: ${jsonPart.substring(0, jsonPart.length > 100 ? 100 : jsonPart.length)}');
-        
+        print(
+          'JSON 前100字元: ${jsonPart.substring(0, jsonPart.length > 100 ? 100 : jsonPart.length)}',
+        );
+
         final dynamic parsed = json.decode(jsonPart);
         if (parsed is List) {
           return parsed.cast<Map<String, dynamic>>();
@@ -81,33 +84,39 @@ class MetroApiService {
         "StationName": "台北車站",
         "DestinationName": "淡水站",
         "CountDown": "00:41",
-        "NowDateTime": "2025-08-10 21:00:22"
+        "NowDateTime": "2025-08-10 21:00:22",
       },
       {
         "TrainNumber": "105",
         "StationName": "台北車站",
         "DestinationName": "象山站",
         "CountDown": "02:15",
-        "NowDateTime": "2025-08-10 21:00:22"
+        "NowDateTime": "2025-08-10 21:00:22",
       },
       {
         "TrainNumber": "",
         "StationName": "松江南京站",
         "DestinationName": "新店站",
         "CountDown": "列車進站",
-        "NowDateTime": "2025-08-10 21:00:22"
-      }
+        "NowDateTime": "2025-08-10 21:00:22",
+      },
     ];
   }
 
   // 過濾特定站點的資料
   static List<Map<String, dynamic>> filterByStation(
-    List<Map<String, dynamic>> data, 
-    String stationName
+    List<Map<String, dynamic>> data,
+    String stationName,
   ) {
-    return data.where((item) => 
-      item['StationName']?.toString().contains(stationName.replaceAll('站', '')) ?? false
-    ).toList();
+    return data
+        .where(
+          (item) =>
+              item['StationName']?.toString().contains(
+                stationName.replaceAll('站', ''),
+              ) ??
+              false,
+        )
+        .toList();
   }
 }
 
@@ -122,57 +131,68 @@ class RouteInfoPage extends StatelessWidget {
   static final List<StationPin> stationPins = [
     StationPin(id: 'R11', title: '台北101/世貿', fx: 0.74, fy: 0.65),
     // StationPin(id: 'G03', title: '松山機場', fx: 0.85, fy: 0.35),
-    StationPin(id: 'BL12R10',  title: '松江南京',  fx: 0.51, fy: 0.52),
-    StationPin(id: 'BL14O07',  title: '忠孝新生',  fx: 0.51, fy: 0.58),
-    StationPin(id: 'BL13',  title: '善導寺',  fx: 0.465, fy: 0.58),
-    StationPin(id: 'BL12R10',  title: '台北車站',  fx: 0.41, fy: 0.58),
-    StationPin(id: 'G14R11',  title: '中山',  fx: 0.41, fy: 0.52),
-    StationPin(id: 'BL11G12',  title: '西門',  fx: 0.345, fy: 0.58),
-    StationPin(id: 'G10R08',  title: '中正紀念堂',  fx: 0.41, fy: 0.65),
-    StationPin(id: 'G11',  title: '小南門',  fx: 0.345, fy: 0.645),
+    StationPin(id: 'BL12R10', title: '松江南京', fx: 0.51, fy: 0.52),
+    StationPin(id: 'BL14O07', title: '忠孝新生', fx: 0.51, fy: 0.58),
+    StationPin(id: 'BL13', title: '善導寺', fx: 0.465, fy: 0.58),
+    StationPin(id: 'BL12R10', title: '台北車站', fx: 0.41, fy: 0.58),
+    StationPin(id: 'G14R11', title: '中山', fx: 0.41, fy: 0.52),
+    StationPin(id: 'BL11G12', title: '西門', fx: 0.345, fy: 0.58),
+    StationPin(id: 'G10R08', title: '中正紀念堂', fx: 0.41, fy: 0.65),
+    StationPin(id: 'G11', title: '小南門', fx: 0.345, fy: 0.645),
   ];
 
   // Modal Bottom Sheet 函數
-  void _showModalBottomSheet(BuildContext context, {String? stationName, String? stationId}) async {
+  void _showModalBottomSheet(
+    BuildContext context, {
+    String? stationName,
+    String? stationId,
+  }) async {
     // 當開啟 Bottom Sheet 時呼叫 API 並顯示結果到 console
     print('🚇 點擊站點: $stationName (ID: $stationId)');
     print('📡 開始呼叫台北捷運 API...');
-    
+
     List<Map<String, dynamic>> stationTrackData = [];
-    
+
     try {
       final trackData = await MetroApiService.fetchTrackInfo();
       print('✅ API 呼叫成功，共獲得 ${trackData.length} 筆資料');
-      
+
       // 過濾出與當前站點相關的資料
-      stationTrackData = MetroApiService.filterByStation(trackData, stationName ?? '台北車站');
+      stationTrackData = MetroApiService.filterByStation(
+        trackData,
+        stationName ?? '台北車站',
+      );
       print('🎯 與 $stationName 相關的資料: ${stationTrackData.length} 筆');
-      
+
       // 詳細顯示相關資料
       for (int i = 0; i < stationTrackData.length; i++) {
         final item = stationTrackData[i];
-        print('  ${i + 1}. 車次: ${item['TrainNumber'] ?? '無'} | '
-              '終點: ${item['DestinationName']} | '
-              '倒數: ${item['CountDown']} | '
-              '時間: ${item['NowDateTime']}');
+        print(
+          '  ${i + 1}. 車次: ${item['TrainNumber'] ?? '無'} | '
+          '終點: ${item['DestinationName']} | '
+          '倒數: ${item['CountDown']} | '
+          '時間: ${item['NowDateTime']}',
+        );
       }
-      
+
       // 如果沒有找到相關資料，顯示所有資料的前5筆作為參考
       if (stationTrackData.isEmpty && trackData.isNotEmpty) {
         print('ℹ️  未找到 $stationName 的資料，顯示前5筆作為參考:');
         final sampleData = trackData.take(5).toList();
         for (int i = 0; i < sampleData.length; i++) {
           final item = sampleData[i];
-          print('  ${i + 1}. 站名: ${item['StationName']} | '
-                '車次: ${item['TrainNumber'] ?? '無'} | '
-                '終點: ${item['DestinationName']} | '
-                '倒數: ${item['CountDown']}');
+          print(
+            '  ${i + 1}. 站名: ${item['StationName']} | '
+            '車次: ${item['TrainNumber'] ?? '無'} | '
+            '終點: ${item['DestinationName']} | '
+            '倒數: ${item['CountDown']}',
+          );
         }
       }
     } catch (e) {
       print('❌ API 呼叫失敗: $e');
     }
-    
+
     print('─' * 50);
 
     showModalBottomSheet(
@@ -284,7 +304,11 @@ class RouteInfoPage extends StatelessWidget {
                         for (final pin in stationPins)
                           _PinWidget(
                             pin: pin,
-                            onTap: () => _showModalBottomSheet(context, stationName: pin.title, stationId: pin.id),
+                            onTap: () => _showModalBottomSheet(
+                              context,
+                              stationName: pin.title,
+                              stationId: pin.id,
+                            ),
                           ),
                       ],
                     ),
@@ -312,10 +336,10 @@ class RouteInfoPage extends StatelessWidget {
 
 // === 資料模型：相對座標 (fx, fy) ===
 class StationPin {
-  final String id;     // 例如 "BL12R10"
-  final String title;  // 顯示名稱
-  final double fx;     // 相對 X（0~1）
-  final double fy;     // 相對 Y（0~1）
+  final String id; // 例如 "BL12R10"
+  final String title; // 顯示名稱
+  final double fx; // 相對 X（0~1）
+  final double fy; // 相對 Y（0~1）
   const StationPin({
     required this.id,
     required this.title,
@@ -330,8 +354,8 @@ class _PinWidget extends StatelessWidget {
   final StationPin pin;
   final VoidCallback onTap;
 
-  static const double _hit = 28;   // 觸控熱區大小
-  static const double _dot = 10;   // 中心圓點（debug用，可隱藏）
+  static const double _hit = 28; // 觸控熱區大小
+  static const double _dot = 10; // 中心圓點（debug用，可隱藏）
 
   @override
   Widget build(BuildContext context) {
@@ -339,7 +363,7 @@ class _PinWidget extends StatelessWidget {
     const mapW = RouteInfoPage.kMapW;
     const mapH = RouteInfoPage.kMapH;
     final left = pin.fx * mapW - _hit / 2;
-    final top  = pin.fy * mapH - _hit / 2;
+    final top = pin.fy * mapH - _hit / 2;
 
     return Positioned(
       left: left,
@@ -355,7 +379,7 @@ class _PinWidget extends StatelessWidget {
             width: _dot,
             height: _dot,
             decoration: BoxDecoration(
-              color: Colors.cyanAccent.withOpacity(0.9),
+              color: Colors.cyanAccent.withValues(alpha: 0.9),
               shape: BoxShape.rectangle, // 改為方形
               borderRadius: BorderRadius.circular(2), // 添加一點圓角
               boxShadow: const [BoxShadow(blurRadius: 4, spreadRadius: 1)],
@@ -371,7 +395,7 @@ class _StationInfoSheet extends StatefulWidget {
   final String stationName;
   final String stationId;
   final List<Map<String, dynamic>> trackData; // 新增列車資料參數
-  
+
   const _StationInfoSheet({
     this.stationName = '台北車站',
     this.stationId = 'BL12R10',
@@ -382,7 +406,8 @@ class _StationInfoSheet extends StatefulWidget {
   State<_StationInfoSheet> createState() => _StationInfoSheetState();
 }
 
-class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProviderStateMixin {
+class _StationInfoSheetState extends State<_StationInfoSheet>
+    with TickerProviderStateMixin {
   int selectedIndex = 0;
   final List<String> tabTitles = ['乘車資訊', '車站資訊', '站外資訊'];
   bool isFavorite = false;
@@ -396,13 +421,9 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    _scaleAnimation = Tween<double>(
-      begin: 1.0,
-      end: 1.2,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.elasticOut,
-    ));
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
+    );
   }
 
   @override
@@ -415,7 +436,7 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
     setState(() {
       isFavorite = !isFavorite;
     });
-    
+
     // 播放動畫
     _animationController.forward().then((_) {
       _animationController.reverse();
@@ -486,20 +507,25 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
           // 第二行：三個按鈕
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(3, (i) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: ElevatedButton(
-                onPressed: () => setState(() => selectedIndex = i),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: selectedIndex == i ? const Color(0xFF26C6DA) : const Color(0xFF2A3A4A),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+            children: List.generate(
+              3,
+              (i) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: ElevatedButton(
+                  onPressed: () => setState(() => selectedIndex = i),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: selectedIndex == i
+                        ? const Color(0xFF26C6DA)
+                        : const Color(0xFF2A3A4A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
+                  child: Text(tabTitles[i]),
                 ),
-                child: Text(tabTitles[i]),
               ),
-            )),
+            ),
           ),
           const SizedBox(height: 12),
           // 下方內容區域
@@ -574,10 +600,10 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
     sortedTrackData.sort((a, b) {
       String countDownA = a['CountDown']?.toString() ?? '';
       String countDownB = b['CountDown']?.toString() ?? '';
-      
+
       int secondsA = _parseCountDownToSeconds(countDownA);
       int secondsB = _parseCountDownToSeconds(countDownB);
-      
+
       return secondsA.compareTo(secondsB); // 升序排列，最小的（最接近）在前
     });
 
@@ -586,7 +612,11 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
       children: [
         const Text(
           '即時列車進站資訊',
-          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 12),
         Expanded(
@@ -628,7 +658,7 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
     // 判斷倒數時間的顏色
     Color countDownColor = Colors.white;
     IconData statusIcon = Icons.train;
-    
+
     if (countDown.contains('進站')) {
       countDownColor = Colors.red;
       statusIcon = Icons.warning;
@@ -653,12 +683,7 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
       decoration: BoxDecoration(
         color: const Color(0xFF2A3A4A),
         borderRadius: BorderRadius.circular(8),
-        border: Border(
-          left: BorderSide(
-            color: countDownColor,
-            width: 4,
-          ),
-        ),
+        border: Border(left: BorderSide(color: countDownColor, width: 4)),
       ),
       child: Row(
         children: [
@@ -682,7 +707,10 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
                     if (trainNumber.isNotEmpty) ...[
                       Text(
                         '車次: $trainNumber',
-                        style: const TextStyle(color: Colors.grey, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
                       ),
                       const SizedBox(width: 12),
                     ],

@@ -10,12 +10,20 @@ import 'dart:async'; // Added for Timer
 import 'edit_favorite_stations_page.dart'; // Added for EditFavoriteStationsPage
 import 'route_info_page.dart'
     show MetroApiService; // Reuse API service for track info
+import '../utils/stations_data.dart';
 
 // 單筆站點到站資訊（本地倒數用）
 class StationArrival {
-  StationArrival({required this.destination, required this.secondsLeft});
+  StationArrival({
+    required this.destination,
+    required this.lineName,
+    required this.baseSeconds,
+    required this.baseTimeMs,
+  });
   final String destination;
-  int secondsLeft;
+  final String? lineName; // 所屬路線名稱
+  final int baseSeconds; // 當下 API 回傳的倒數秒數
+  final int baseTimeMs; // 由 NowDateTime 解析出的毫秒時間
 }
 
 class HomePage extends StatefulWidget {
@@ -96,6 +104,62 @@ class _HomePageState extends State<HomePage> {
     _startPollingArrivals();
   }
 
+  // 會員資訊橫幅
+  Widget _buildMemberBanner() {
+    final bool isLoggedIn =
+        GlobalLoginState.isLoggedIn && GlobalLoginState.userName.isNotEmpty;
+    final String name = isLoggedIn ? GlobalLoginState.userName : '未登入';
+    final Color border = const Color(0xFF114D4D);
+    final Color bg = isLoggedIn
+        ? const Color(0xFF1F3B45)
+        : const Color(0xFF2A3A4A);
+    final Color accent = isLoggedIn ? const Color(0xFF26C6DA) : Colors.grey;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border, width: 1),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: accent.withValues(alpha: 0.2),
+            child: Icon(Icons.person, color: accent, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isLoggedIn ? '已登入' : '尚未登入',
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
@@ -128,7 +192,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // 取得所有站點的最新列車資訊並更新常用站點的兩個方向
+  // 取得所有站點的最新列車資訊並更新常用站點的兩個方向（含路線與時間基準）
   Future<void> _fetchArrivals() async {
     try {
       if (_isFetching) return;
@@ -145,24 +209,39 @@ class _HomePageState extends State<HomePage> {
           allTrackData,
           stationName,
         );
-        // 轉換為可倒數的結構
+        // 轉換為可倒數的結構：帶上路線與 NowDateTime 作為基準
         final List<StationArrival> arrivals = filtered
             .map((e) {
               final destination = e['DestinationName']?.toString() ?? '';
               final countDown = e['CountDown']?.toString() ?? '';
-              final seconds = _parseCountDownToSeconds(countDown);
-              if (seconds == null) return null;
+              final baseSeconds = _parseCountDownToSeconds(countDown);
+              if (baseSeconds == null) return null;
+              final nowStr = e['NowDateTime']?.toString() ?? '';
+              final baseMs = _parseNowDateTimeMs(nowStr);
+              final lineName = StationsData.lineForDestination(destination);
               return StationArrival(
                 destination: destination,
-                secondsLeft: seconds,
+                lineName: lineName,
+                baseSeconds: baseSeconds,
+                baseTimeMs: baseMs,
               );
             })
             .whereType<StationArrival>()
             .toList();
 
-        // 以秒數由小到大排序，取前兩筆
-        arrivals.sort((a, b) => a.secondsLeft.compareTo(b.secondsLeft));
-        nextArrivalsByStation[stationName] = arrivals.take(2).toList();
+        // 依路線分組，每線取前2筆，合併後最多4筆
+        final Map<String, List<StationArrival>> byLine = {};
+        for (final a in arrivals) {
+          final key = a.lineName ?? '未知路線';
+          byLine.putIfAbsent(key, () => []).add(a);
+        }
+        final List<StationArrival> merged = [];
+        byLine.forEach((line, list) {
+          list.sort((a, b) => a.baseSeconds.compareTo(b.baseSeconds));
+          merged.addAll(list.take(2));
+        });
+        merged.sort((a, b) => a.baseSeconds.compareTo(b.baseSeconds));
+        nextArrivalsByStation[stationName] = merged.take(4).toList();
       }
 
       // 套用至畫面資料
@@ -196,7 +275,12 @@ class _HomePageState extends State<HomePage> {
           k,
           v
               .map(
-                (a) => {'destination': a.destination, 'seconds': a.secondsLeft},
+                (a) => {
+                  'destination': a.destination,
+                  'line': a.lineName,
+                  'baseSeconds': a.baseSeconds,
+                  'baseTimeMs': a.baseTimeMs,
+                },
               )
               .toList(),
         ),
@@ -205,7 +289,7 @@ class _HomePageState extends State<HomePage> {
     await prefs.setString('latest_arrivals', jsonEncode(payload));
   }
 
-  // 更新站點時間：每秒遞減現有倒數，並回寫到UI字串
+  // 更新站點時間：根據 baseSeconds 與 NowDateTime（baseTimeMs）推算剩餘秒數
   void _updateStationTimes() {
     setState(() {
       // 常用站：使用 stationArrivals 的資料遞減
@@ -215,15 +299,11 @@ class _HomePageState extends State<HomePage> {
         final arrivals = stationArrivals[stationName];
         if (arrivals == null || arrivals.isEmpty) continue;
 
-        // 逐一遞減前兩筆
+        // 逐一計算前兩筆剩餘秒數
         for (int j = 0; j < arrivals.length && j < 2; j++) {
           final a = arrivals[j];
-          if (a.secondsLeft > 0) {
-            a.secondsLeft -= 1;
-          }
-          final formatted = a.secondsLeft <= 0
-              ? '進站'
-              : _formatSeconds(a.secondsLeft);
+          final remaining = _remainingSeconds(a.baseSeconds, a.baseTimeMs);
+          final formatted = remaining <= 0 ? '進站' : _formatSeconds(remaining);
           if (j == 0) {
             frequentStations[i]['destination1'] = a.destination;
             frequentStations[i]['timeToDirection1'] = formatted;
@@ -249,17 +329,56 @@ class _HomePageState extends State<HomePage> {
       final second = arrivals.length > 1 ? arrivals[1] : null;
 
       if (first != null) {
+        final r1 = _remainingSeconds(first.baseSeconds, first.baseTimeMs);
         frequentStations[i]['destination1'] = first.destination;
-        frequentStations[i]['timeToDirection1'] = first.secondsLeft <= 0
+        frequentStations[i]['timeToDirection1'] = r1 <= 0
             ? '進站'
-            : _formatSeconds(first.secondsLeft);
+            : _formatSeconds(r1);
       }
       if (second != null) {
+        final r2 = _remainingSeconds(second.baseSeconds, second.baseTimeMs);
         frequentStations[i]['destination2'] = second.destination;
-        frequentStations[i]['timeToDirection2'] = second.secondsLeft <= 0
+        frequentStations[i]['timeToDirection2'] = r2 <= 0
             ? '進站'
-            : _formatSeconds(second.secondsLeft);
+            : _formatSeconds(r2);
       }
+    }
+  }
+
+  // 利用 NowDateTime 作為基準，計算剩餘秒數
+  int _remainingSeconds(int baseSeconds, int baseMs) {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final elapsed = ((nowMs - baseMs) / 1000).floor();
+    return baseSeconds - elapsed;
+  }
+
+  // 解析 NowDateTime: 'yyyy-MM-dd HH:mm:ss' -> 毫秒
+  int _parseNowDateTimeMs(String now) {
+    try {
+      final normalized = now.replaceAll('/', '-');
+      final parts = normalized.split(' ');
+      if (parts.length != 2) return DateTime.now().millisecondsSinceEpoch;
+      final date = parts[0].split('-');
+      final time = parts[1].split(':');
+      if (date.length != 3 || time.length < 2) {
+        return DateTime.now().millisecondsSinceEpoch;
+      }
+      final year = int.parse(date[0]);
+      final month = int.parse(date[1]);
+      final day = int.parse(date[2]);
+      final hour = int.parse(time[0]);
+      final minute = int.parse(time[1]);
+      final second = time.length > 2 ? int.parse(time[2]) : 0;
+      return DateTime(
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        second,
+      ).millisecondsSinceEpoch;
+    } catch (_) {
+      return DateTime.now().millisecondsSinceEpoch;
     }
   }
 
@@ -315,7 +434,9 @@ class _HomePageState extends State<HomePage> {
   void _rebuildFrequentStationsFromNames() {
     // 簡化：依名稱保留既有目的地，若無則給預設方向
     final List<Map<String, dynamic>> rebuilt = [];
-    for (final name in favoriteStationNames.take(2)) {
+    // 強制只保留前兩個常用站點
+    favoriteStationNames = favoriteStationNames.take(2).toList();
+    for (final name in favoriteStationNames) {
       final existing = frequentStations.firstWhere(
         (e) => e['name'] == name,
         orElse: () => {
@@ -404,6 +525,8 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _buildMemberBanner(),
+                  const SizedBox(height: 16),
                   // 常用站點區塊
                   _buildFrequentStationsSection(),
 
@@ -474,50 +597,73 @@ class _HomePageState extends State<HomePage> {
           children: [
             // 前兩個常用站點
             ...frequentStations.map((station) {
+              // 根據站所屬線動態背景（多線時疊加漸層）
+              final lines = StationsData.linesForStation(station['name']);
+              final List<Color> bgColors = lines
+                  .take(2)
+                  .map((l) => Color(StationsData.lineColors[l] ?? 0xFF22303C))
+                  .toList();
+              final BoxDecoration boxDeco = bgColors.length <= 1
+                  ? BoxDecoration(
+                      color: const Color(0xFF22303C),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF114D4D),
+                        width: 1,
+                      ),
+                    )
+                  : BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: const Alignment(0.866, 0.5), // 45° 斜向
+                        colors: [
+                          bgColors[0].withValues(alpha: 0.20),
+                          bgColors[1].withValues(alpha: 0.20),
+                        ],
+                      ),
+                      color: const Color(0xFF22303C),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF114D4D),
+                        width: 1,
+                      ),
+                    );
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF22303C),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF114D4D), width: 1),
-                ),
+                decoration: boxDeco,
                 child: Row(
                   children: [
                     // 左側：車站圖標和名稱（縮小寬度）
                     Expanded(
                       flex: 1,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
                         children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 24,
-                                height: 24,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF3A4A5A),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Icon(
-                                  Icons.train,
-                                  color: Color(0xFF26C6DA),
-                                  size: 16,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                station['name'],
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF3A4A5A),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Icon(
+                              Icons.train,
+                              color: Color(0xFF26C6DA),
+                              size: 16,
+                            ),
                           ),
-                          const SizedBox(height: 8),
-                          // 已將進站時間移至右側顯示
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              station['name'],
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -528,15 +674,7 @@ class _HomePageState extends State<HomePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildArrivalChip(
-                            '${station['timeToDirection1']} | 往 ${station['destination1']}',
-                            const Color(0xFF26C6DA),
-                          ),
-                          const SizedBox(height: 8),
-                          _buildArrivalChip(
-                            '${station['timeToDirection2']} | 往 ${station['destination2']}',
-                            const Color(0xFFFFB74D),
-                          ),
+                          ..._buildStationArrivalChips(station['name']),
                         ],
                       ),
                     ),
@@ -732,7 +870,7 @@ class _HomePageState extends State<HomePage> {
       margin: const EdgeInsets.only(right: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.18),
+        color: color.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color, width: 1),
       ),
@@ -755,6 +893,52 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+
+  // 依站名建立多線四方向的進站 chip（依路線上色）
+  List<Widget> _buildStationArrivalChips(String stationName) {
+    final List<Widget> chips = [];
+    final arrivals = stationArrivals[stationName] ?? const [];
+
+    // 先依路線將資料分組
+    final Map<String, List<StationArrival>> byLine = {};
+    for (final a in arrivals) {
+      final line = a.lineName ?? '未知路線';
+      byLine.putIfAbsent(line, () => []).add(a);
+    }
+
+    // 以每條線的最早到站時間排序，最多取兩線，每線最多兩筆 → 最多四筆
+    final List<String> sortedLines = byLine.keys.toList()
+      ..sort((a, b) {
+        final la = byLine[a]!
+          ..sort((x, y) => x.baseSeconds.compareTo(y.baseSeconds));
+        final lb = byLine[b]!
+          ..sort((x, y) => x.baseSeconds.compareTo(y.baseSeconds));
+        final va = (la.isNotEmpty ? la.first.baseSeconds : 1 << 30);
+        final vb = (lb.isNotEmpty ? lb.first.baseSeconds : 1 << 30);
+        return va.compareTo(vb);
+      });
+    for (final line in sortedLines.take(2)) {
+      final list = byLine[line]!
+        ..sort((a, b) => a.baseSeconds.compareTo(b.baseSeconds));
+      final color = Color(StationsData.lineColors[line] ?? 0xFF26C6DA);
+      for (int i = 0; i < list.length && i < 2; i++) {
+        final r = _remainingSeconds(list[i].baseSeconds, list[i].baseTimeMs);
+        final text =
+            '${r <= 0 ? '進站' : _formatSeconds(r)} | 往 ${list[i].destination}';
+        chips.add(_buildArrivalChip(text, color));
+        chips.add(const SizedBox(height: 8));
+      }
+    }
+
+    if (chips.isNotEmpty && chips.last is SizedBox) {
+      chips.removeLast();
+    }
+    // 若沒有資料，顯示「末班車已過」
+    if (chips.isEmpty) {
+      chips.add(_buildArrivalChip('末班車已過', Colors.grey));
+    }
+    return chips;
   }
 
   // 顯示自訂功能頁面

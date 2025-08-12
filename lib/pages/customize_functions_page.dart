@@ -395,7 +395,7 @@ class _CustomizeFunctionsPageState extends State<CustomizeFunctionsPage> {
               child: Container(
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? const Color(0xFF26C6DA).withOpacity(0.2)
+                      ? const Color(0xFF26C6DA).withValues(alpha: 0.2)
                       : const Color(0xFF3A4A5A),
                   borderRadius: BorderRadius.circular(12),
                   border: isSelected
