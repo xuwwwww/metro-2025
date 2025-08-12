@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 // === 台北捷運 API 服務 ===
 class MetroApiService {
   static const String endpoint = 'https://api.metro.taipei/metroapi/TrackInfo.asmx';
+  // === YouBike 端點 ===
+  static const String ubikeEndpoint = 'https://api.metro.taipei/MetroAPI/UBike.asmx';
   static const Map<String, String> headers = {
     'Content-Type': 'text/xml; charset=utf-8'
   };
@@ -108,6 +110,72 @@ class MetroApiService {
     return data.where((item) => 
       item['StationName']?.toString().contains(stationName.replaceAll('站', '')) ?? false
     ).toList();
+  }
+
+  // 取得全部周邊 YouBike（不帶站名）
+  static Future<List<Map<String, dynamic>>> fetchYouBikeAll() async {
+    const String body = '''<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+               xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <getYourBikeNearBy xmlns="http://tempuri.org/">
+      <userName>$username</userName>
+      <passWord>$password</passWord>
+    </getYourBikeNearBy>
+  </soap:Body>
+</soap:Envelope>''';
+    return _postSoapAndExtractJson(ubikeEndpoint, body);
+  }
+
+  // 依「車站名稱」取得周邊 YouBike
+  // 注意：文件參數是 SationName（少一個 t），要照文件拼法送出
+  static Future<List<Map<String, dynamic>>> fetchYouBikeByStation(String stationName) async {
+    final safeName = stationName.replaceAll('站', '');
+    final String body = '''<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+               xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <getYourBikeNearByName xmlns="http://tempuri.org/">
+      <userName>$username</userName>
+      <passWord>$password</passWord>
+      <SationName>$safeName</SationName>
+    </getYourBikeNearByName>
+  </soap:Body>
+</soap:Envelope>''';
+    return _postSoapAndExtractJson(ubikeEndpoint, body);
+  }
+
+  // 共用：送 SOAP，並把「JSON + XML」的回應切掉 XML，只 parse 前段 JSON
+  static Future<List<Map<String, dynamic>>> _postSoapAndExtractJson(String url, String body) async {
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: headers, // 'Content-Type': 'text/xml; charset=utf-8'
+        body: utf8.encode(body),
+      );
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+      final text = utf8.decode(response.bodyBytes);
+
+      String jsonPart = '';
+      if (text.startsWith('[') || text.startsWith('{')) {
+        final idx = text.indexOf('<?xml');
+        jsonPart = (idx >= 0) ? text.substring(0, idx).trim() : text.trim();
+      } else {
+        throw Exception('Unexpected response (no leading JSON)');
+      }
+
+      final parsed = json.decode(jsonPart);
+      if (parsed is List) return parsed.cast<Map<String, dynamic>>();
+      if (parsed is Map) return [parsed.cast<String, dynamic>()];
+      throw Exception('Unexpected JSON format');
+    } catch (e) {
+      print('YouBike API 錯誤: $e');
+      return const [];
+    }
   }
 }
 
@@ -324,6 +392,160 @@ class StationPin {
   });
 }
 
+// === 出口資料模型 ===
+class StationExit {
+  final String code;       // M1, M2...
+  final String desc;       // 地面定位描述
+  final bool escalator;    // 電扶梯
+  final bool stairs;       // 樓梯
+  final bool elevator;     // 電梯
+  final bool accessible;   // 無障礙(含電梯)
+  const StationExit({
+    required this.code,
+    required this.desc,
+    this.escalator = false,
+    this.stairs = false,
+    this.elevator = false,
+    this.accessible = false,
+  });
+}
+
+// === 靜態 dummy 資料 ===
+class StationStaticData {
+  static const String taipeiMainId = 'BL12R10'; // 台北車站 ID
+  static const String taipeiMainName = '台北車站';
+
+  static const Map<String, List<StationExit>> exits = {
+    taipeiMainId: [
+      StationExit(code: 'M1', desc: '台鐵台北車站北一門旁', escalator: true, stairs: true),
+      StationExit(code: 'M2', desc: '市民大道一段 209 號對面，近國父史蹟紀念館', elevator: true, accessible: true, escalator: true, stairs: true),
+      StationExit(code: 'M3', desc: '忠孝西路一段 45 號', escalator: true),
+      StationExit(code: 'M4', desc: '忠孝西路一段 38 號對面', elevator: true, accessible: true, escalator: true),
+      StationExit(code: 'M5', desc: '忠孝西路一段 66 號對面', escalator: true),
+      StationExit(code: 'M6', desc: '忠孝西路一段 38 號', stairs: true),
+      StationExit(code: 'M7', desc: '忠孝西路一段 33 號', stairs: true),
+      StationExit(code: 'M8', desc: '公園路 13 號', escalator: true),
+    ],
+  };
+
+  // 允許用 stationId 或 stationName 查
+  static List<StationExit> exitsBy(String idOrName) {
+    if (idOrName.contains(taipeiMainName)) return exits[taipeiMainId] ?? const [];
+    return exits[idOrName] ?? const [];
+  }
+}
+
+// === 設施資料模型 ===
+class FacilityEntry {
+  final String title;        // 群組標題：詢問處、廁所...
+  final IconData icon;       // Icons.info_outline / Icons.wc / Icons.family_restroom...
+  final List<String> lines;  // 子彈點描述（多行）
+  const FacilityEntry({
+    required this.title, 
+    required this.icon, 
+    required this.lines
+  });
+}
+
+// === 車站設施靜態資料 ===
+class StationFacilities {
+  static const String taipeiMainId = 'BL12R10';
+  static const String taipeiMainName = '台北車站';
+
+  static final Map<String, List<FacilityEntry>> data = {
+    taipeiMainId: [
+      FacilityEntry(
+        title: '詢問處',
+        icon: Icons.info_outline,
+        lines: [
+          '近出口 M3／M7／M8，近忠孝西路',
+          '近出口 M4／M5／M6，近忠孝西路',
+          '近出口 M1／M2，近市民大道',
+        ],
+      ),
+      FacilityEntry(
+        title: '廁所',
+        icon: Icons.wc,
+        lines: [
+          '非付費區：近出口 M1／M2',
+          '付費區（板南線）',
+          '付費區（淡水信義線）',
+        ],
+      ),
+      FacilityEntry(
+        title: '親子無障礙廁所',
+        icon: Icons.family_restroom,
+        lines: [
+          '非付費區：近出口 M1／M2',
+          '付費區（板南線）',
+          '付費區（淡水信義線）',
+        ],
+      ),
+      FacilityEntry(
+        title: '哺集乳室',
+        icon: Icons.child_friendly,
+        lines: ['板南線：付費區，B2 大廳層'],
+      ),
+      FacilityEntry(
+        title: '嬰兒尿布臺',
+        icon: Icons.baby_changing_station,
+        lines: [
+          '淡水信義線：親子無障礙廁所／男、女廁',
+          '板南線：付費區（哺集乳室／親子無障礙廁所／男、女廁）',
+        ],
+      ),
+    ],
+  };
+
+  static List<FacilityEntry> of(String idOrName) {
+    if (idOrName.contains(taipeiMainName)) return data[taipeiMainId] ?? const [];
+    return data[idOrName] ?? const [];
+  }
+}
+
+// === 公車轉乘資料模型 ===
+class BusTransferItem {
+  final String route;   // 路線編號：0東、14、1610...
+  final String stop;    // 站名：台北車站、台北轉運站...
+  final String exit;    // 對應出口：M1、M5、M7...
+  const BusTransferItem({required this.route, required this.stop, required this.exit});
+}
+
+// === 台北車站（BL12R10）— 公車轉乘假資料 ===
+class StationBusDummy {
+  static const String taipeiMainId = 'BL12R10';
+  static const String taipeiMainName = '台北車站';
+
+  static final Map<String, List<BusTransferItem>> data = {
+    taipeiMainId: [
+      BusTransferItem(route: '0東',  stop: '台北車站',   exit: 'M5'),
+      BusTransferItem(route: '14',   stop: '台北車站',   exit: 'M1'),
+      BusTransferItem(route: '14',   stop: '蘆洲',       exit: 'M7'),
+      BusTransferItem(route: '1610', stop: '台北轉運站', exit: 'M1'),
+      BusTransferItem(route: '1610', stop: '建國客運站', exit: 'M1'),
+      BusTransferItem(route: '1611', stop: '台北轉運站', exit: 'M1'),
+      BusTransferItem(route: '1611', stop: '臺南轉運站', exit: 'M1'),
+      BusTransferItem(route: '1613', stop: '台北轉運站', exit: 'M1'),
+      BusTransferItem(route: '1613', stop: '屏東轉運站', exit: 'M1'),
+      BusTransferItem(route: '1615', stop: '台北轉運站', exit: 'M1'),
+      BusTransferItem(route: '1615', stop: '彰化站',     exit: 'M1'),
+      BusTransferItem(route: '1616', stop: '台北轉運站', exit: 'M1'),
+      BusTransferItem(route: '1616', stop: '員林轉運站', exit: 'M1'),
+      BusTransferItem(route: '1617', stop: '台北轉運站', exit: 'M1'),
+      BusTransferItem(route: '1617', stop: '東勢站',     exit: 'M1'),
+      BusTransferItem(route: '1618', stop: '台北轉運站', exit: 'M1'),
+      BusTransferItem(route: '1618', stop: '嘉義市轉運中心', exit: 'M1'),
+      BusTransferItem(route: '1619', stop: '台北轉運站', exit: 'M1'),
+      BusTransferItem(route: '1619', stop: '國軍英雄館', exit: 'M1'),
+    ],
+  };
+
+  static List<BusTransferItem> of(String idOrName) {
+    if (idOrName.contains(taipeiMainName)) return data[taipeiMainId] ?? const [];
+    return data[idOrName] ?? const [];
+  }
+}
+
 // === 單一 pin 的呈現（可切換為隱形 hit area）===
 class _PinWidget extends StatelessWidget {
   const _PinWidget({required this.pin, required this.onTap});
@@ -388,6 +610,13 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
   bool isFavorite = false;
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
+  
+  // YouBike 相關狀態
+  List<Map<String, dynamic>> youBikeStations = [];
+  bool isLoadingYouBike = false;
+  
+  // 公車排序狀態
+  int busSortIndex = 1; // 0=依出口排序、1=依公車排序（預設如截圖為「依公車排序」）
 
   @override
   void initState() {
@@ -420,6 +649,42 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
     _animationController.forward().then((_) {
       _animationController.reverse();
     });
+  }
+
+  Future<void> _onSelectTab(int i) async {
+    setState(() => selectedIndex = i);
+    if (i != 2) return; // 只在「站外資訊」時呼叫
+
+    setState(() => isLoadingYouBike = true);
+    
+    print('🚲 呼叫 YouBike API（依站名）: ${widget.stationName}');
+    try {
+      // 也可改為 fetchYouBikeAll() 看全部
+      final bikes = await MetroApiService.fetchYouBikeByStation(widget.stationName);
+      print('✅ YouBike 筆數: ${bikes.length}');
+      for (int i = 0; i < bikes.length; i++) {
+        final it = bikes[i];
+        final name = (it['StationName'] ?? it['name'] ?? it['sna'] ?? '').toString();
+        final lat  = (it['Latitude'] ?? it['lat'] ?? it['LAT'] ?? '').toString();
+        final lng  = (it['Longitude'] ?? it['lng'] ?? it['LNG'] ?? '').toString();
+        if (name.isNotEmpty || (lat.isNotEmpty && lng.isNotEmpty)) {
+          print('  ${i + 1}. $name  ($lat, $lng)');
+        } else {
+          print('  ${i + 1}. ${jsonEncode(it)}');
+        }
+      }
+      setState(() {
+        youBikeStations = bikes;
+        isLoadingYouBike = false;
+      });
+    } catch (e) {
+      print('❌ YouBike 呼叫失敗: $e');
+      setState(() {
+        youBikeStations = [];
+        isLoadingYouBike = false;
+      });
+    }
+    print('─' * 50);
   }
 
   @override
@@ -489,7 +754,7 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
             children: List.generate(3, (i) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: ElevatedButton(
-                onPressed: () => setState(() => selectedIndex = i),
+                onPressed: () => _onSelectTab(i),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: selectedIndex == i ? const Color(0xFF26C6DA) : const Color(0xFF2A3A4A),
                   foregroundColor: Colors.white,
@@ -534,26 +799,201 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
       case 0:
         return _buildTrainInfo(); // 顯示列車資訊
       case 1:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text('車站資訊內容', style: TextStyle(color: Colors.white, fontSize: 16)),
-            SizedBox(height: 8),
-            Text('這裡可以放車站設施、出口、轉乘等資訊。', style: TextStyle(color: Colors.grey)),
-          ],
-        );
+        return _buildStationInfo(); // 顯示出口清單
       case 2:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text('站外資訊內容', style: TextStyle(color: Colors.white, fontSize: 16)),
-            SizedBox(height: 8),
-            Text('這裡可以放周邊景點、美食、交通等資訊。', style: TextStyle(color: Colors.grey)),
-          ],
-        );
+        return _buildOutsideInfo(); // YouBike + 公車（假資料）
       default:
         return Container();
     }
+  }
+
+  // 站外資訊（YouBike + 公車）
+  Widget _buildOutsideInfo() {
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 12),
+      children: [
+        _buildYouBikeBlock(),   // 既有的 YouBike 視覺（改為非 Expanded 版）
+        const SizedBox(height: 16),
+        _buildBusSection(),     // 新增：公車轉乘（假資料）
+      ],
+    );
+  }
+
+  // 新增：建構 YouBike 區塊（固定高度版本）
+  Widget _buildYouBikeBlock() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.directions_bike, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              '${widget.stationName} 周邊 YouBike',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (isLoadingYouBike) ...[
+              const SizedBox(width: 12),
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.cyan),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (isLoadingYouBike)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32.0),
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.cyan),
+              ),
+            ),
+          )
+        else if (youBikeStations.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(24),
+            child: const Center(
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.location_off,
+                    size: 48,
+                    color: Colors.grey,
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    '未找到 YouBike 站點資料',
+                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          SizedBox(
+            height: 220,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A3A4A),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.withOpacity(0.3)),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _YouBikeMapWidget(
+                  stations: youBikeStations,
+                  currentStationName: widget.stationName,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // 新增：公車轉乘區塊
+  Widget _buildBusSection() {
+    final items = List<BusTransferItem>.from(
+      StationBusDummy.of(widget.stationId.isNotEmpty ? widget.stationId : widget.stationName),
+    );
+
+    // 排序
+    if (busSortIndex == 0) {
+      items.sort((a, b) => a.exit.compareTo(b.exit));            // 出口排序
+    } else {
+      // 公車排序：先 route，再 stop
+      items.sort((a, b) => a.route == b.route 
+          ? a.stop.compareTo(b.stop) 
+          : a.route.compareTo(b.route));
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A3A4A),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 標題
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+            child: Row(
+              children: const [
+                Icon(Icons.directions_bus, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Text('公車轉乘', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+          // 分段切換（依出口／依公車）
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                _segBtn('依出口排序', selected: busSortIndex == 0, onTap: () => setState(() => busSortIndex = 0)),
+                const SizedBox(width: 8),
+                _segBtn('依公車排序', selected: busSortIndex == 1, onTap: () => setState(() => busSortIndex = 1)),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: Colors.white24),
+          // 列表
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.white12),
+            itemBuilder: (context, i) {
+              final it = items[i];
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 56,
+                      child: Text(it.route, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                    Expanded(
+                      child: Text(it.stop, style: const TextStyle(color: Colors.white, fontSize: 16)),
+                    ),
+                    _ExitBadge(it.exit),
+                    const SizedBox(width: 6),
+                    const Icon(Icons.chevron_right, color: Colors.white70),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 分段按鈕樣式（左灰右藍，對應你的截圖）
+  Widget _segBtn(String text, {required bool selected, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF2E77B8) : Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: selected ? Colors.transparent : Colors.white30),
+        ),
+        child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+      ),
+    );
   }
 
   // 新增：建構列車資訊的 Widget
@@ -599,6 +1039,159 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
           ),
         ),
       ],
+    );
+  }
+
+  // 新增：建構車站資訊的 Widget
+  Widget _buildStationInfo() {
+    final exits = StationStaticData.exitsBy(widget.stationId.isNotEmpty ? widget.stationId : widget.stationName);
+    final facilities = StationFacilities.of(widget.stationId.isNotEmpty ? widget.stationId : widget.stationName);
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 出口資訊區段
+          const Text('出口資訊', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          if (exits.isNotEmpty) ...[
+            // 圖例
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: const [
+                _Legend(icon: Icons.escalator, label: '電扶梯'),
+                _Legend(icon: Icons.stairs, label: '樓梯'),
+                _Legend(icon: Icons.elevator, label: '電梯'),
+                _Legend(icon: Icons.accessible, label: '無障礙'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // 出口清單
+            ...exits.map((exit) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A3A4A),
+                borderRadius: BorderRadius.circular(8),
+                border: Border(
+                  left: BorderSide(
+                    color: const Color(0xFF26C6DA),
+                    width: 4,
+                  ),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF26C6DA),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          exit.code,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          exit.desc,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      if (exit.accessible) const _MiniIcon(icon: Icons.accessible, label: '無障礙'),
+                      if (exit.elevator) const _MiniIcon(icon: Icons.elevator, label: '電梯'),
+                      if (exit.escalator) const _MiniIcon(icon: Icons.escalator, label: '電扶梯'),
+                      if (exit.stairs) const _MiniIcon(icon: Icons.stairs, label: '樓梯'),
+                    ],
+                  ),
+                ],
+              ),
+            )).toList(),
+          ] else ...[
+            const Text('目前尚無此站的出口資料', style: TextStyle(color: Colors.grey)),
+          ],
+          
+          const SizedBox(height: 20),
+          
+          // 設施資訊區段
+          const Text('其他設施／設備', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          if (facilities.isNotEmpty) ...[
+            ...facilities.map((facility) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A3A4A),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    facility.icon, 
+                    size: 28, 
+                    color: Colors.white70,
+                    semanticLabel: facility.title,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          facility.title, 
+                          style: const TextStyle(
+                            color: Colors.white, 
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...facility.lines.map((line) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            '• $line', 
+                            style: const TextStyle(
+                              color: Colors.white, 
+                              fontSize: 13, 
+                              height: 1.4,
+                            ),
+                          ),
+                        )).toList(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )).toList(),
+          ] else ...[
+            const Text('目前尚無該站的設施資料', style: TextStyle(color: Colors.grey)),
+          ],
+          
+          const SizedBox(height: 16),
+        ],
+      ),
     );
   }
 
@@ -697,6 +1290,552 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
           ),
         ],
       ),
+    );
+  }
+
+  // 新增：建構YouBike地圖的 Widget
+  Widget _buildYouBikeMap() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.directions_bike, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              '${widget.stationName} 周邊 YouBike',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (isLoadingYouBike) ...[
+              const SizedBox(width: 12),
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.cyan),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (isLoadingYouBike)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32.0),
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.cyan),
+              ),
+            ),
+          )
+        else if (youBikeStations.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(24),
+            child: const Center(
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.location_off,
+                    size: 48,
+                    color: Colors.grey,
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    '未找到 YouBike 站點資料',
+                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A3A4A),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.withOpacity(0.3)),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _YouBikeMapWidget(
+                  stations: youBikeStations,
+                  currentStationName: widget.stationName,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// 小型圖示 + 字
+class _MiniIcon extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _MiniIcon({required this.icon, required this.label});
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: Colors.grey[400]),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey[400],
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// 圖例
+class _Legend extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _Legend({required this.icon, required this.label});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A3A4A),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.grey[300]),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey[300],
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// YouBike地圖Widget
+class _YouBikeMapWidget extends StatelessWidget {
+  final List<Map<String, dynamic>> stations;
+  final String currentStationName;
+
+  const _YouBikeMapWidget({
+    required this.stations,
+    required this.currentStationName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (stations.isEmpty) {
+      return const Center(
+        child: Text(
+          '沒有YouBike站點資料',
+          style: TextStyle(color: Colors.grey),
+        ),
+      );
+    }
+
+    // 計算地圖邊界
+    double minLat = double.infinity;
+    double maxLat = -double.infinity;
+    double minLng = double.infinity;
+    double maxLng = -double.infinity;
+
+    List<YouBikeStation> validStations = [];
+
+    for (final station in stations) {
+      final latStr = (station['Latitude'] ?? station['lat'] ?? station['LAT'] ?? '').toString();
+      final lngStr = (station['Longitude'] ?? station['lng'] ?? station['LNG'] ?? '').toString();
+      final name = (station['StationName'] ?? station['name'] ?? station['sna'] ?? '').toString();
+      final available = (station['AvailableBikes'] ?? station['available'] ?? 0).toString();
+      final capacity = (station['TotalSlots'] ?? station['capacity'] ?? 0).toString();
+
+      final lat = double.tryParse(latStr);
+      final lng = double.tryParse(lngStr);
+
+      // 更嚴格的座標驗證
+      if (lat != null && lng != null && 
+          !lat.isNaN && !lng.isNaN && 
+          !lat.isInfinite && !lng.isInfinite &&
+          lat != 0.0 && lng != 0.0 &&
+          lat >= -90 && lat <= 90 && // 有效緯度範圍
+          lng >= -180 && lng <= 180) { // 有效經度範圍
+        
+        validStations.add(YouBikeStation(
+          name: name.isNotEmpty ? name : '未知站點',
+          lat: lat,
+          lng: lng,
+          available: int.tryParse(available) ?? 0,
+          capacity: int.tryParse(capacity) ?? 0,
+        ));
+
+        // 更新邊界值
+        if (minLat.isInfinite || lat < minLat) minLat = lat;
+        if (maxLat.isInfinite || lat > maxLat) maxLat = lat;
+        if (minLng.isInfinite || lng < minLng) minLng = lng;
+        if (maxLng.isInfinite || lng > maxLng) maxLng = lng;
+      }
+    }
+
+    if (validStations.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: Text(
+            '無法解析YouBike站點座標',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    // 檢查邊界值是否有效
+    if (minLat.isInfinite || maxLat.isInfinite || 
+        minLng.isInfinite || maxLng.isInfinite ||
+        minLat.isNaN || maxLat.isNaN || 
+        minLng.isNaN || maxLng.isNaN) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.0),
+          child: Text(
+            '座標邊界計算錯誤',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    // 確保最小邊界範圍，避免除以零
+    final latRange = maxLat - minLat;
+    final lngRange = maxLng - minLng;
+    
+    if (latRange < 0.0001) { // 如果範圍太小，設定最小範圍
+      final center = (minLat + maxLat) / 2;
+      minLat = center - 0.0001;
+      maxLat = center + 0.0001;
+    }
+    
+    if (lngRange < 0.0001) {
+      final center = (minLng + maxLng) / 2;
+      minLng = center - 0.0001;
+      maxLng = center + 0.0001;
+    }
+
+    return Column(
+      children: [
+        // 地圖標題和統計資訊
+        Container(
+          padding: const EdgeInsets.all(12),
+          color: const Color(0xFF1A2327),
+          child: Row(
+            children: [
+              const Icon(Icons.map, color: Colors.cyan, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                '找到 ${validStations.length} 個 YouBike 站點',
+                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+              ),
+              const Spacer(),
+              const Icon(Icons.info_outline, color: Colors.grey, size: 16),
+            ],
+          ),
+        ),
+        // 簡化版地圖顯示
+        Expanded(
+          child: Container(
+            color: const Color(0xFF1A2327),
+            child: CustomPaint(
+              painter: YouBikeMapPainter(
+                stations: validStations,
+                minLat: minLat,
+                maxLat: maxLat,
+                minLng: minLng,
+                maxLng: maxLng,
+              ),
+              child: Container(),
+            ),
+          ),
+        ),
+        // 站點清單
+        Container(
+          height: 120,
+          color: const Color(0xFF1A2327),
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.all(8),
+            itemCount: validStations.length,
+            itemBuilder: (context, index) {
+              final station = validStations[index];
+              final availabilityRatio = station.capacity > 0 
+                  ? station.available / station.capacity 
+                  : 0.0;
+              
+              Color statusColor = Colors.red;
+              if (availabilityRatio > 0.3) statusColor = Colors.orange;
+              if (availabilityRatio > 0.6) statusColor = Colors.green;
+
+              return Container(
+                width: 140,
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2A3A4A),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border(
+                    left: BorderSide(color: statusColor, width: 3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      station.name.length > 15 
+                          ? '${station.name.substring(0, 15)}...'
+                          : station.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.directions_bike, color: statusColor, size: 14),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${station.available}/${station.capacity}',
+                          style: TextStyle(color: statusColor, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${station.lat.toStringAsFixed(4)}, ${station.lng.toStringAsFixed(4)}',
+                      style: const TextStyle(color: Colors.grey, fontSize: 10),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// YouBike站點資料模型
+class YouBikeStation {
+  final String name;
+  final double lat;
+  final double lng;
+  final int available;
+  final int capacity;
+
+  const YouBikeStation({
+    required this.name,
+    required this.lat,
+    required this.lng,
+    required this.available,
+    required this.capacity,
+  });
+}
+
+// 簡化版地圖畫筆
+class YouBikeMapPainter extends CustomPainter {
+  final List<YouBikeStation> stations;
+  final double minLat, maxLat, minLng, maxLng;
+
+  YouBikeMapPainter({
+    required this.stations,
+    required this.minLat,
+    required this.maxLat,
+    required this.minLng,
+    required this.maxLng,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 背景
+    final backgroundPaint = Paint()..color = const Color(0xFF0D1B1F);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), backgroundPaint);
+
+    // 網格線
+    final gridPaint = Paint()
+      ..color = Colors.grey.withOpacity(0.2)
+      ..strokeWidth = 0.5;
+
+    for (int i = 0; i <= 5; i++) {
+      final x = (size.width / 5) * i;
+      final y = (size.height / 5) * i;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    // 檢查座標範圍是否有效
+    final latRange = maxLat - minLat;
+    final lngRange = maxLng - minLng;
+    
+    // 避免除以零或無效範圍
+    if (latRange <= 0 || lngRange <= 0 || 
+        latRange.isNaN || lngRange.isNaN ||
+        latRange.isInfinite || lngRange.isInfinite) {
+      // 繪製錯誤訊息
+      final textPainter = TextPainter(
+        text: const TextSpan(
+          text: '座標資料無效',
+          style: TextStyle(color: Colors.white, fontSize: 16),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, Offset(
+        size.width / 2 - textPainter.width / 2,
+        size.height / 2 - textPainter.height / 2,
+      ));
+      return;
+    }
+
+    // 繪製YouBike站點
+    for (final station in stations) {
+      // 檢查站點座標是否有效
+      if (station.lat.isNaN || station.lng.isNaN ||
+          station.lat.isInfinite || station.lng.isInfinite) {
+        continue; // 跳過無效座標
+      }
+
+      // 計算相對位置（0-1範圍）
+      final relativeX = (station.lng - minLng) / lngRange;
+      final relativeY = (station.lat - minLat) / latRange;
+      
+      // 檢查相對位置是否有效
+      if (relativeX.isNaN || relativeY.isNaN ||
+          relativeX.isInfinite || relativeY.isInfinite) {
+        continue; // 跳過無效計算結果
+      }
+
+      // 轉換為畫布座標
+      final x = relativeX * size.width;
+      final y = size.height - (relativeY * size.height); // Y軸翻轉
+      
+      // 最終檢查畫布座標
+      if (x.isNaN || y.isNaN || x.isInfinite || y.isInfinite) {
+        continue; // 跳過無效的畫布座標
+      }
+
+      // 確保座標在畫布範圍內
+      if (x < 0 || x > size.width || y < 0 || y > size.height) {
+        continue; // 跳過超出範圍的座標
+      }
+
+      final availabilityRatio = station.capacity > 0 
+          ? station.available / station.capacity 
+          : 0.0;
+      
+      Color statusColor = Colors.red;
+      if (availabilityRatio > 0.3) statusColor = Colors.orange;
+      if (availabilityRatio > 0.6) statusColor = Colors.green;
+
+      // 站點圓圈
+      final stationPaint = Paint()
+        ..color = statusColor
+        ..style = PaintingStyle.fill;
+      
+      final borderPaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1;
+
+      canvas.drawCircle(Offset(x, y), 6, stationPaint);
+      canvas.drawCircle(Offset(x, y), 6, borderPaint);
+
+      // 站點編號或可用數量指示
+      if (station.available < 10) {
+        final textPainter = TextPainter(
+          text: TextSpan(
+            text: station.available.toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 8,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        );
+        textPainter.layout();
+        final textX = x - textPainter.width / 2;
+        final textY = y - textPainter.height / 2;
+        
+        // 檢查文字座標是否有效
+        if (!textX.isNaN && !textY.isNaN && 
+            !textX.isInfinite && !textY.isInfinite) {
+          textPainter.paint(canvas, Offset(textX, textY));
+        }
+      }
+    }
+
+    // 圖例
+    final legendY = size.height - 30;
+    const legendItems = [
+      {'color': Colors.green, 'text': '充足'},
+      {'color': Colors.orange, 'text': '普通'},
+      {'color': Colors.red, 'text': '稀少'},
+    ];
+
+    double legendX = 10;
+    for (final item in legendItems) {
+      final paint = Paint()..color = item['color'] as Color;
+      canvas.drawCircle(Offset(legendX + 6, legendY), 4, paint);
+      
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: item['text'] as String,
+          style: const TextStyle(color: Colors.white, fontSize: 10),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, Offset(legendX + 15, legendY - 5));
+      legendX += textPainter.width + 30;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// 小黃角「M1/M5/M7」徽章
+class _ExitBadge extends StatelessWidget {
+  final String code;
+  const _ExitBadge(this.code);
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFD54F), // 黃色
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(code, style: const TextStyle(color: Color(0xFF114488), fontWeight: FontWeight.w900)),
     );
   }
 }
