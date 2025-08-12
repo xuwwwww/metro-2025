@@ -38,7 +38,7 @@ class IconPicker extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               color: icon == selectedIcon
-                  ? Colors.teal.withOpacity(0.2)
+                  ? Colors.teal.withValues(alpha: 0.2)
                   : Colors.white,
               border: Border.all(
                 color: icon == selectedIcon

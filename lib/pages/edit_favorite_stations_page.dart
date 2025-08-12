@@ -31,6 +31,12 @@ class _EditFavoriteStationsPageState extends State<EditFavoriteStationsPage> {
       if (_selected.contains(name)) {
         _selected.remove(name);
       } else {
+        if (_selected.length >= 2) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('最多只能選擇 2 個常用站點')));
+          return;
+        }
         _selected.add(name);
       }
     });
@@ -66,17 +72,36 @@ class _EditFavoriteStationsPageState extends State<EditFavoriteStationsPage> {
             return FilterChip(
               selected: isSel,
               onSelected: (_) => _toggleStation(name),
-              selectedColor: const Color(0xFF26C6DA).withOpacity(0.2),
+              selectedColor: const Color(0xFF26C6DA).withValues(alpha: 0.2),
               checkmarkColor: Colors.white,
               side: BorderSide(
                 color: isSel ? const Color(0xFF26C6DA) : Colors.grey.shade600,
               ),
-              label: Text(
-                name,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.95),
-                  fontSize: 14,
-                ),
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 上色該站所屬線（最多兩個色塊）
+                  ...StationsData.linesForStation(name).take(2).map((line) {
+                    final colorInt =
+                        StationsData.lineColors[line] ?? 0xFF26C6DA;
+                    return Container(
+                      width: 10,
+                      height: 10,
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: BoxDecoration(
+                        color: Color(colorInt),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    );
+                  }).toList(),
+                  Text(
+                    name,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.95),
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
               ),
               avatar: isSel
                   ? const Icon(Icons.check, size: 18, color: Color(0xFF26C6DA))

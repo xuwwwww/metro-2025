@@ -162,4 +162,42 @@ class StationsData {
       '大坪林',
     ],
   };
+
+  // 各線代表色（ARGB）
+  static const Map<String, int> lineColors = {
+    '淡水信義線': 0xFFE53935, // 紅
+    '松山新店線': 0xFF43A047, // 綠
+    '中和新蘆線': 0xFFFB8C00, // 橘
+    '板南線': 0xFF1E88E5, // 藍
+    '文湖線': 0xFF8D6E63, // 棕
+    '環狀線': 0xFFFDD835, // 黃
+  };
+
+  // 查詢某站所屬之所有路線（最多兩線）
+  static List<String> linesForStation(String stationName) {
+    final List<String> lines = [];
+    lineStations.forEach((line, stations) {
+      if (stations.contains(stationName)) {
+        lines.add(line);
+      }
+    });
+    return lines;
+  }
+
+  // 依據目的地判斷所屬路線（以端點為準），若無法判斷回傳 null
+  static String? lineForDestination(String destination) {
+    final String dest = destination.replaceAll('站', '');
+    for (final entry in lineEndpoints.entries) {
+      // 端點可能以「蘆洲/迴龍」這類複合字串呈現，需拆分判斷
+      final List<String> endpoints = entry.value
+          .expand((raw) => raw.split('/'))
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      if (endpoints.any((end) => dest.contains(end))) {
+        return entry.key;
+      }
+    }
+    return null;
+  }
 }

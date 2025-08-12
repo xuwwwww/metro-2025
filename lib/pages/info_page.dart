@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:io';
+import 'dart:async';
 import '../utils/stations_data.dart';
 import '../utils/global_login_state.dart';
 import 'chat_page.dart';
@@ -34,6 +36,8 @@ class _InfoPageState extends State<InfoPage> {
   final TextEditingController _chatController = TextEditingController();
   // 一般分頁的共用對話訊息（三個選項共用同一串）
   final List<Map<String, String>> _generalMsgs = [];
+  bool _isOnline = true;
+  Timer? _netTimer;
 
   @override
   void initState() {
@@ -42,6 +46,20 @@ class _InfoPageState extends State<InfoPage> {
     _startTransition();
     // 預設顯示一般客服的問候
     _generalMsgs.add({'from': '一般客服BOT', 'text': '您好，請問需要什麼協助？'});
+    _startOnlineProbe();
+  }
+
+  void _startOnlineProbe() {
+    _netTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
+      try {
+        final r = await InternetAddress.lookup('example.com');
+        if (!mounted) return;
+        setState(() => _isOnline = r.isNotEmpty);
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _isOnline = false);
+      }
+    });
   }
 
   Future<void> _loadPermissionsIfLoggedIn() async {
@@ -324,10 +342,21 @@ class _InfoPageState extends State<InfoPage> {
   }
 
   Widget _generalCard() {
-    return Column(
-      children: [
-        _cardWrapper(
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF3A4A5A),
+        // 使用橢圓圓角，將圓心視覺上往左右外推（寬度較大，高度維持）
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.elliptical(100, 70),
+          topRight: Radius.elliptical(100, 70),
+          bottomLeft: Radius.circular(12),
+          bottomRight: Radius.circular(12),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 15, 10, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 上方膠囊選項
             Row(
@@ -351,99 +380,129 @@ class _InfoPageState extends State<InfoPage> {
               ],
             ),
             const SizedBox(height: 12),
-            // 顯示目前對話對象
+            // 角色顯示置中 + 線上點貼近文字
             Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF26C6DA).withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: const Color(0xFF26C6DA),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.support_agent,
-                        color: Color(0xFF26C6DA),
-                        size: 14,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '正在與：${_tabLabel(_generalTab)} 對話',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                const Icon(
+                  Icons.support_agent,
+                  color: Color(0xFF26C6DA),
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  _tabLabel(_generalTab),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 25,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
+                const SizedBox(width: 4),
+                if (_isOnline)
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF4CAF50),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
               ],
             ),
+            const SizedBox(height: 8),
+            // 聊天清單
+            Expanded(child: _buildGeneralChatList(false)),
           ],
         ),
-        const SizedBox(height: 12),
-        // 用 Expanded 讓聊天區塊吃掉剩餘空間
-        Expanded(child: _buildGeneralChatList()),
-      ],
+      ),
     );
   }
 
-  Widget _buildGeneralChatList() {
+  Widget _buildGeneralChatList([bool wrapDecoration = true]) {
     // 顯示聊天訊息區域 + 送出列
     final List<Map<String, String>> msgs = _generalMsgs;
 
+    final list = ListView.builder(
+      padding: EdgeInsets.only(
+        // 讓清單剛好到輸入列上緣，再加一點視覺緩衝
+        bottom:
+            _inputBarHeight +
+            MediaQuery.of(context).padding.bottom +
+            _gapToNav +
+            6,
+      ),
+      itemCount: msgs.length,
+      itemBuilder: (context, index) {
+        final m = msgs[index];
+        final isYou = m['from'] == 'You';
+        return Row(
+          mainAxisAlignment: isYou
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isYou) ...[
+              // 營運方頭像使用灰色 Metro Logo
+              ColorFiltered(
+                colorFilter: const ColorFilter.mode(
+                  Colors.grey,
+                  BlendMode.srcIn,
+                ),
+                child: Image.asset(
+                  'lib/assets/Taipei_Metro_Logo.png',
+                  width: 28,
+                  height: 28,
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+            Flexible(
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isYou
+                      ? const Color(0xFFE0E0E0)
+                      : const Color(0xFF3A4A5A),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  m['text'] ?? '',
+                  style: TextStyle(
+                    color: isYou ? Colors.black87 : Colors.white70,
+                  ),
+                ),
+              ),
+            ),
+            if (isYou) ...[
+              const SizedBox(width: 6),
+              const CircleAvatar(
+                radius: 14,
+                backgroundColor: Color(0xFF26C6DA),
+                child: Icon(Icons.person, size: 16, color: Colors.white),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+
+    if (!wrapDecoration) return list;
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF2A3A4A),
         borderRadius: BorderRadius.circular(12),
       ),
       padding: const EdgeInsets.all(8),
-      child: ListView.builder(
-        padding: EdgeInsets.only(
-          // 讓清單剛好到輸入列上緣，再加一點視覺緩衝
-          bottom:
-              _inputBarHeight +
-              MediaQuery.of(context).padding.bottom +
-              _gapToNav +
-              6,
-        ),
-        itemCount: msgs.length,
-        itemBuilder: (context, index) {
-          final m = msgs[index];
-          final isYou = m['from'] == 'You';
-          return Align(
-            alignment: isYou ? Alignment.centerRight : Alignment.centerLeft,
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              padding: const EdgeInsets.all(8),
-              constraints: const BoxConstraints(maxWidth: 240),
-              decoration: BoxDecoration(
-                color: isYou
-                    ? const Color(0xFFE0E0E0)
-                    : const Color(0xFF3A4A5A),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                m['text'] ?? '',
-                style: TextStyle(
-                  color: isYou ? Colors.black87 : Colors.white70,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+      child: list,
     );
+  }
+
+  @override
+  void dispose() {
+    _netTimer?.cancel();
+    super.dispose();
   }
 
   Widget _buildGeneralInputRow() {
@@ -470,6 +529,24 @@ class _InfoPageState extends State<InfoPage> {
                   ),
                   child: Row(
                     children: [
+                      // 左側 Taipei_Metro_Logo 灰色
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: ColorFiltered(
+                            colorFilter: const ColorFilter.mode(
+                              Colors.grey,
+                              BlendMode.srcIn,
+                            ),
+                            child: Image.asset(
+                              'lib/assets/Taipei_Metro_Logo.png',
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                      ),
                       Expanded(
                         child: TextField(
                           controller: _chatController,
@@ -500,13 +577,13 @@ class _InfoPageState extends State<InfoPage> {
               ),
               const SizedBox(width: 8),
               Container(
-                width: 40,
-                height: 40,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
                   color: const Color(0xFF1E2A33),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(24),
                 ),
-                child: const Icon(Icons.mic, color: Colors.white60, size: 18),
+                child: const Icon(Icons.mic, color: Colors.white60, size: 22),
               ),
             ],
           ),
@@ -529,10 +606,10 @@ class _InfoPageState extends State<InfoPage> {
     if (_generalTab == tab) return;
     setState(() {
       _generalTab = tab;
-      // 插入系統/對象提示訊息，保持共用對話串
-      final label = _tabLabel(tab);
-      final greet = _tabGreeting(tab);
-      _generalMsgs.add({'from': '${label}BOT', 'text': greet});
+      // 切換時清空歷史訊息，重新插入對應提示
+      _generalMsgs
+        ..clear()
+        ..add({'from': '${_tabLabel(tab)}BOT', 'text': _tabGreeting(tab)});
     });
   }
 
