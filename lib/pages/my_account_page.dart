@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../utils/version_check_wrapper.dart';
 import '../utils/version_checker.dart';
 import '../utils/font_size_manager.dart';
 import '../utils/global_login_state.dart';
 import '../widgets/adaptive_text.dart';
 
 class MyAccountPage extends StatefulWidget {
-  const MyAccountPage({super.key});
+  final bool autoOpenAccountDialog;
+  const MyAccountPage({super.key, this.autoOpenAccountDialog = false});
 
   @override
   State<MyAccountPage> createState() => _MyAccountPageState();
@@ -47,6 +47,12 @@ class _MyAccountPageState extends State<MyAccountPage> {
     }
     // 初始化字體大小管理器
     _initializeFontSize();
+    // 若要求自動開啟帳戶設定
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.autoOpenAccountDialog) {
+        _showAccountDialog();
+      }
+    });
   }
 
   // 從全局狀態載入登入狀態
@@ -121,144 +127,117 @@ class _MyAccountPageState extends State<MyAccountPage> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Column(
-        children: [
-          // 頂部標題欄
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            color: const Color(0xFF22303C),
-            child: const Center(
-              child: Text(
-                '台北捷運',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-
-          // 頁面標題
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            color: const Color(0xFF2A3A4A),
-            child: Center(
-              child: Text(
-                _userName.isNotEmpty ? '我的帳戶 · $_userName' : '我的帳戶',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ),
-
-          // 主要內容區域
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 常用功能區塊
-                  _buildFrequentFunctionsSection(),
-
-                  const SizedBox(height: 24),
-
-                  // 開發者選項區塊
-                  _buildDeveloperOptionsSection(),
-
-                  const SizedBox(height: 24),
-
-                  // 版本資訊
-                  FutureBuilder<String>(
-                    future: VersionChecker().getLocalVersionString(),
-                    builder: (context, snapshot) {
-                      final version = snapshot.data ?? '載入中...';
-                      return Center(child: AdaptiveSmallText('版本 $version'));
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 常用功能區塊
-  Widget _buildFrequentFunctionsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Scaffold(
+      backgroundColor: const Color(0xFF22303C),
+      body: SafeArea(
+        child: Column(
           children: [
-            const Text(
-              '常用功能',
-              style: TextStyle(
-                color: Color(0xFF114D4D),
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+            // 頂部標題欄
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              color: const Color(0xFF22303C),
+              child: const Center(
+                child: Text(
+                  '台北捷運',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
-            TextButton(
-              onPressed: () {
-                // 編輯功能
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('編輯功能')));
-              },
-              child: const Text(
-                '編輯',
-                style: TextStyle(color: Color(0xFF26C6DA), fontSize: 14),
+
+            // 頁面標題
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              color: const Color(0xFF2A3A4A),
+              child: Center(
+                child: Text(
+                  _userName.isNotEmpty ? '我的帳戶 · $_userName' : '我的帳戶',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+
+            // 主要內容區域
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 常用功能區塊
+                    _buildFrequentFunctionsSection(),
+
+                    const SizedBox(height: 24),
+
+                    // 開發者選項區塊
+                    _buildDeveloperOptionsSection(),
+
+                    const SizedBox(height: 24),
+
+                    // 版本資訊
+                    FutureBuilder<String>(
+                      future: VersionChecker().getLocalVersionString(),
+                      builder: (context, snapshot) {
+                        final version = snapshot.data ?? '載入中...';
+                        return Center(child: AdaptiveSmallText('版本 $version'));
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 12),
+      ),
+    );
+  }
 
-        // 功能按鈕網格
-        Row(
-          children: [
-            Expanded(
-              child: _buildFunctionButton(
-                icon: Icons.person,
-                label: '帳戶',
-                onTap: () => _showAccountDialog(),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildFunctionButton(
-                icon: Icons.notifications,
-                label: '通知',
-                onTap: () => _showNotificationSettings(),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildFunctionButton(
-                icon: Icons.dark_mode,
-                label: '主題',
-                onTap: () => _showThemeSettings(),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildFunctionButton(
-                icon: Icons.text_fields,
-                label: '字體',
-                onTap: () => _showFontSettings(),
-              ),
-            ),
-          ],
+  // 常用設定：改為與「開發人員選項」一致的清單排版
+  Widget _buildFrequentFunctionsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '常用設定',
+          style: TextStyle(
+            color: Color(0xFF114D4D),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildSettingTile(
+          icon: Icons.person,
+          title: '帳戶',
+          subtitle: '管理帳戶資訊與安全',
+          onTap: _showAccountDialog,
+        ),
+        _buildSettingTile(
+          icon: Icons.notifications,
+          title: '通知',
+          subtitle: '推播提醒與通知設定',
+          onTap: _showNotificationSettings,
+        ),
+        _buildSettingTile(
+          icon: Icons.dark_mode,
+          title: '主題',
+          subtitle: '深色模式與外觀',
+          onTap: _showThemeSettings,
+        ),
+        _buildSettingTile(
+          icon: Icons.text_fields,
+          title: '字體',
+          subtitle: '調整字體大小',
+          onTap: _showFontSettings,
         ),
       ],
     );
@@ -407,6 +386,37 @@ class _MyAccountPageState extends State<MyAccountPage> {
                   ScaffoldMessenger.of(
                     context,
                   ).showSnackBar(const SnackBar(content: Text('已登出')));
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.delete_forever,
+                  color: Colors.redAccent,
+                ),
+                title: const Text(
+                  '刪除帳戶',
+                  style: TextStyle(color: Colors.redAccent),
+                ),
+                subtitle: const Text(
+                  '此動作將清除本地登入狀態（示意）',
+                  style: TextStyle(color: Colors.grey),
+                ),
+                onTap: () async {
+                  // 示意刪除：清除本地登入與權限（實際應呼叫後端刪除）
+                  setState(() {
+                    _isLoggedIn = false;
+                    _currentUid = null;
+                    _isAdmin = false;
+                    _userName = '';
+                    _selectedRooms.clear();
+                  });
+                  await GlobalLoginState.clearLoginState();
+                  if (context.mounted) Navigator.pop(context);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('帳戶已刪除（示意）')));
+                  }
                 },
               ),
             ] else ...[

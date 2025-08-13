@@ -2,6 +2,8 @@
     <!-- internet -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- microphone for speech to text -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     
     <!-- wifi -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />

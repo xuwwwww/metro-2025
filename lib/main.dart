@@ -69,13 +69,16 @@ class MyApp extends StatelessWidget {
           bodyMedium: TextStyle(color: Colors.white70),
         ),
       ),
-      home: const MainScaffold(),
+      home: MainScaffold(key: MainScaffold.globalKey),
     );
   }
 }
 
 class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
+  // 提供全域控制切換分頁
+  static final GlobalKey<_MainScaffoldState> globalKey =
+      GlobalKey<_MainScaffoldState>();
 
   @override
   State<MainScaffold> createState() => _MainScaffoldState();
@@ -83,14 +86,14 @@ class MainScaffold extends StatefulWidget {
 
 class _MainScaffoldState extends State<MainScaffold> {
   int _selectedIndex = 2; // 主頁在中間位置
+  bool _myAccountAutoOpen = false;
 
-  final List<Widget> _pages = [
-    const RouteInfoPage(),
-    const InfoPage(),
-    HomePage(),
-    const GoBenefitsPage(),
-    const MyAccountPage(),
-  ];
+  void selectTab(int index, {bool openAccountDialog = false}) {
+    setState(() {
+      _selectedIndex = index;
+      _myAccountAutoOpen = openAccountDialog && index == 4;
+    });
+  }
 
   // 在應用啟動時檢查版本
   @override
@@ -103,13 +106,23 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> pages = [
+      const RouteInfoPage(),
+      InfoPage(key: InfoPage.globalKey),
+      HomePage(),
+      const GoBenefitsPage(),
+      MyAccountPage(autoOpenAccountDialog: _myAccountAutoOpen),
+    ];
     return Scaffold(
-      body: _pages[_selectedIndex],
+      body: pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
           setState(() {
             _selectedIndex = index;
+            if (_selectedIndex != 4) {
+              _myAccountAutoOpen = false;
+            }
           });
         },
         type: BottomNavigationBarType.fixed,

@@ -5,19 +5,22 @@ import 'package:http/http.dart' as http;
 
 // === 台北捷運 API 服務 ===
 class MetroApiService {
-  static const String endpoint = 'https://api.metro.taipei/metroapi/TrackInfo.asmx';
+  static const String endpoint =
+      'https://api.metro.taipei/metroapi/TrackInfo.asmx';
   // === YouBike 端點 ===
-  static const String ubikeEndpoint = 'https://api.metro.taipei/MetroAPI/UBike.asmx';
+  static const String ubikeEndpoint =
+      'https://api.metro.taipei/MetroAPI/UBike.asmx';
   static const Map<String, String> headers = {
-    'Content-Type': 'text/xml; charset=utf-8'
+    'Content-Type': 'text/xml; charset=utf-8',
   };
 
   // 模擬帳號密碼 - 實際使用時請從環境變數或安全配置讀取
-  static const String username = 'MetroTaipeiHackathon2025';  // TODO: 替換為實際帳號
-  static const String password = 'bZ0dQG96N';  // TODO: 替換為實際密碼
+  static const String username = 'MetroTaipeiHackathon2025';
+  static const String password = 'bZ0dQG96N';
 
   static Future<List<Map<String, dynamic>>> fetchTrackInfo() async {
-    final body = '''<?xml version="1.0" encoding="utf-8"?>
+    final body =
+        '''<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                xmlns:xsd="http://www.w3.org/2001/XMLSchema"
                xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
@@ -39,7 +42,7 @@ class MetroApiService {
       if (response.statusCode == 200) {
         String responseText = utf8.decode(response.bodyBytes);
         print('原始回應長度: ${responseText.length}');
-        
+
         // 提取 JSON 部分（在 XML 之前）
         String jsonPart = '';
         if (responseText.startsWith('[')) {
@@ -55,10 +58,10 @@ class MetroApiService {
           print('回應不是以 JSON 陣列開頭，可能是錯誤回應');
           return _getMockData();
         }
-        
+
         print('提取的 JSON 長度: ${jsonPart.length}');
-        print('JSON 前100字元: ${jsonPart.substring(0, jsonPart.length > 100 ? 100 : jsonPart.length)}');
-        
+        // print('JSON 前100字元: ${jsonPart.substring(0, jsonPart.length > 100 ? 100 : jsonPart.length)}');
+
         final dynamic parsed = json.decode(jsonPart);
         if (parsed is List) {
           return parsed.cast<Map<String, dynamic>>();
@@ -83,38 +86,45 @@ class MetroApiService {
         "StationName": "台北車站",
         "DestinationName": "淡水站",
         "CountDown": "00:41",
-        "NowDateTime": "2025-08-10 21:00:22"
+        "NowDateTime": "2025-08-10 21:00:22",
       },
       {
         "TrainNumber": "105",
         "StationName": "台北車站",
         "DestinationName": "象山站",
         "CountDown": "02:15",
-        "NowDateTime": "2025-08-10 21:00:22"
+        "NowDateTime": "2025-08-10 21:00:22",
       },
       {
         "TrainNumber": "",
         "StationName": "松江南京站",
         "DestinationName": "新店站",
         "CountDown": "列車進站",
-        "NowDateTime": "2025-08-10 21:00:22"
-      }
+        "NowDateTime": "2025-08-10 21:00:22",
+      },
     ];
   }
 
   // 過濾特定站點的資料
   static List<Map<String, dynamic>> filterByStation(
-    List<Map<String, dynamic>> data, 
-    String stationName
+    List<Map<String, dynamic>> data,
+    String stationName,
   ) {
-    return data.where((item) => 
-      item['StationName']?.toString().contains(stationName.replaceAll('站', '')) ?? false
-    ).toList();
+    return data
+        .where(
+          (item) =>
+              item['StationName']?.toString().contains(
+                stationName.replaceAll('站', ''),
+              ) ??
+              false,
+        )
+        .toList();
   }
 
   // 取得全部周邊 YouBike（不帶站名）
   static Future<List<Map<String, dynamic>>> fetchYouBikeAll() async {
-    const String body = '''<?xml version="1.0" encoding="utf-8"?>
+    const String body =
+        '''<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                xmlns:xsd="http://www.w3.org/2001/XMLSchema"
                xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
@@ -130,9 +140,12 @@ class MetroApiService {
 
   // 依「車站名稱」取得周邊 YouBike
   // 注意：文件參數是 SationName（少一個 t），要照文件拼法送出
-  static Future<List<Map<String, dynamic>>> fetchYouBikeByStation(String stationName) async {
+  static Future<List<Map<String, dynamic>>> fetchYouBikeByStation(
+    String stationName,
+  ) async {
     final safeName = stationName.replaceAll('站', '');
-    final String body = '''<?xml version="1.0" encoding="utf-8"?>
+    final String body =
+        '''<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                xmlns:xsd="http://www.w3.org/2001/XMLSchema"
                xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
@@ -148,7 +161,10 @@ class MetroApiService {
   }
 
   // 共用：送 SOAP，並把「JSON + XML」的回應切掉 XML，只 parse 前段 JSON
-  static Future<List<Map<String, dynamic>>> _postSoapAndExtractJson(String url, String body) async {
+  static Future<List<Map<String, dynamic>>> _postSoapAndExtractJson(
+    String url,
+    String body,
+  ) async {
     try {
       final response = await http.post(
         Uri.parse(url),
@@ -190,57 +206,68 @@ class RouteInfoPage extends StatelessWidget {
   static final List<StationPin> stationPins = [
     StationPin(id: 'R11', title: '台北101/世貿', fx: 0.74, fy: 0.65),
     // StationPin(id: 'G03', title: '松山機場', fx: 0.85, fy: 0.35),
-    StationPin(id: 'BL12R10',  title: '松江南京',  fx: 0.51, fy: 0.52),
-    StationPin(id: 'BL14O07',  title: '忠孝新生',  fx: 0.51, fy: 0.58),
-    StationPin(id: 'BL13',  title: '善導寺',  fx: 0.465, fy: 0.58),
-    StationPin(id: 'BL12R10',  title: '台北車站',  fx: 0.41, fy: 0.58),
-    StationPin(id: 'G14R11',  title: '中山',  fx: 0.41, fy: 0.52),
-    StationPin(id: 'BL11G12',  title: '西門',  fx: 0.345, fy: 0.58),
-    StationPin(id: 'G10R08',  title: '中正紀念堂',  fx: 0.41, fy: 0.65),
-    StationPin(id: 'G11',  title: '小南門',  fx: 0.345, fy: 0.645),
+    StationPin(id: 'BL12R10', title: '松江南京', fx: 0.51, fy: 0.52),
+    StationPin(id: 'BL14O07', title: '忠孝新生', fx: 0.51, fy: 0.58),
+    StationPin(id: 'BL13', title: '善導寺', fx: 0.465, fy: 0.58),
+    StationPin(id: 'BL12R10', title: '台北車站', fx: 0.41, fy: 0.58),
+    StationPin(id: 'G14R11', title: '中山', fx: 0.41, fy: 0.52),
+    StationPin(id: 'BL11G12', title: '西門', fx: 0.345, fy: 0.58),
+    StationPin(id: 'G10R08', title: '中正紀念堂', fx: 0.41, fy: 0.65),
+    StationPin(id: 'G11', title: '小南門', fx: 0.345, fy: 0.645),
   ];
 
   // Modal Bottom Sheet 函數
-  void _showModalBottomSheet(BuildContext context, {String? stationName, String? stationId}) async {
+  void _showModalBottomSheet(
+    BuildContext context, {
+    String? stationName,
+    String? stationId,
+  }) async {
     // 當開啟 Bottom Sheet 時呼叫 API 並顯示結果到 console
     print('🚇 點擊站點: $stationName (ID: $stationId)');
     print('📡 開始呼叫台北捷運 API...');
-    
+
     List<Map<String, dynamic>> stationTrackData = [];
-    
+
     try {
       final trackData = await MetroApiService.fetchTrackInfo();
       print('✅ API 呼叫成功，共獲得 ${trackData.length} 筆資料');
-      
+
       // 過濾出與當前站點相關的資料
-      stationTrackData = MetroApiService.filterByStation(trackData, stationName ?? '台北車站');
+      stationTrackData = MetroApiService.filterByStation(
+        trackData,
+        stationName ?? '台北車站',
+      );
       print('🎯 與 $stationName 相關的資料: ${stationTrackData.length} 筆');
-      
+
       // 詳細顯示相關資料
       for (int i = 0; i < stationTrackData.length; i++) {
         final item = stationTrackData[i];
-        print('  ${i + 1}. 車次: ${item['TrainNumber'] ?? '無'} | '
-              '終點: ${item['DestinationName']} | '
-              '倒數: ${item['CountDown']} | '
-              '時間: ${item['NowDateTime']}');
+        print(
+          '  ${i + 1}. 車次: ${item['TrainNumber'] ?? '無'} | '
+          '終點: ${item['DestinationName']} | '
+          '倒數: ${item['CountDown']} | '
+          '時間: ${item['NowDateTime']}',
+        );
       }
-      
+
       // 如果沒有找到相關資料，顯示所有資料的前5筆作為參考
       if (stationTrackData.isEmpty && trackData.isNotEmpty) {
         print('ℹ️  未找到 $stationName 的資料，顯示前5筆作為參考:');
         final sampleData = trackData.take(5).toList();
         for (int i = 0; i < sampleData.length; i++) {
           final item = sampleData[i];
-          print('  ${i + 1}. 站名: ${item['StationName']} | '
-                '車次: ${item['TrainNumber'] ?? '無'} | '
-                '終點: ${item['DestinationName']} | '
-                '倒數: ${item['CountDown']}');
+          print(
+            '  ${i + 1}. 站名: ${item['StationName']} | '
+            '車次: ${item['TrainNumber'] ?? '無'} | '
+            '終點: ${item['DestinationName']} | '
+            '倒數: ${item['CountDown']}',
+          );
         }
       }
     } catch (e) {
       print('❌ API 呼叫失敗: $e');
     }
-    
+
     print('─' * 50);
 
     showModalBottomSheet(
@@ -352,7 +379,11 @@ class RouteInfoPage extends StatelessWidget {
                         for (final pin in stationPins)
                           _PinWidget(
                             pin: pin,
-                            onTap: () => _showModalBottomSheet(context, stationName: pin.title, stationId: pin.id),
+                            onTap: () => _showModalBottomSheet(
+                              context,
+                              stationName: pin.title,
+                              stationId: pin.id,
+                            ),
                           ),
                       ],
                     ),
@@ -380,10 +411,10 @@ class RouteInfoPage extends StatelessWidget {
 
 // === 資料模型：相對座標 (fx, fy) ===
 class StationPin {
-  final String id;     // 例如 "BL12R10"
-  final String title;  // 顯示名稱
-  final double fx;     // 相對 X（0~1）
-  final double fy;     // 相對 Y（0~1）
+  final String id; // 例如 "BL12R10"
+  final String title; // 顯示名稱
+  final double fx; // 相對 X（0~1）
+  final double fy; // 相對 Y（0~1）
   const StationPin({
     required this.id,
     required this.title,
@@ -394,12 +425,12 @@ class StationPin {
 
 // === 出口資料模型 ===
 class StationExit {
-  final String code;       // M1, M2...
-  final String desc;       // 地面定位描述
-  final bool escalator;    // 電扶梯
-  final bool stairs;       // 樓梯
-  final bool elevator;     // 電梯
-  final bool accessible;   // 無障礙(含電梯)
+  final String code; // M1, M2...
+  final String desc; // 地面定位描述
+  final bool escalator; // 電扶梯
+  final bool stairs; // 樓梯
+  final bool elevator; // 電梯
+  final bool accessible; // 無障礙(含電梯)
   const StationExit({
     required this.code,
     required this.desc,
@@ -417,10 +448,28 @@ class StationStaticData {
 
   static const Map<String, List<StationExit>> exits = {
     taipeiMainId: [
-      StationExit(code: 'M1', desc: '台鐵台北車站北一門旁', escalator: true, stairs: true),
-      StationExit(code: 'M2', desc: '市民大道一段 209 號對面，近國父史蹟紀念館', elevator: true, accessible: true, escalator: true, stairs: true),
+      StationExit(
+        code: 'M1',
+        desc: '台鐵台北車站北一門旁',
+        escalator: true,
+        stairs: true,
+      ),
+      StationExit(
+        code: 'M2',
+        desc: '市民大道一段 209 號對面，近國父史蹟紀念館',
+        elevator: true,
+        accessible: true,
+        escalator: true,
+        stairs: true,
+      ),
       StationExit(code: 'M3', desc: '忠孝西路一段 45 號', escalator: true),
-      StationExit(code: 'M4', desc: '忠孝西路一段 38 號對面', elevator: true, accessible: true, escalator: true),
+      StationExit(
+        code: 'M4',
+        desc: '忠孝西路一段 38 號對面',
+        elevator: true,
+        accessible: true,
+        escalator: true,
+      ),
       StationExit(code: 'M5', desc: '忠孝西路一段 66 號對面', escalator: true),
       StationExit(code: 'M6', desc: '忠孝西路一段 38 號', stairs: true),
       StationExit(code: 'M7', desc: '忠孝西路一段 33 號', stairs: true),
@@ -430,20 +479,22 @@ class StationStaticData {
 
   // 允許用 stationId 或 stationName 查
   static List<StationExit> exitsBy(String idOrName) {
-    if (idOrName.contains(taipeiMainName)) return exits[taipeiMainId] ?? const [];
+    if (idOrName.contains(taipeiMainName))
+      return exits[taipeiMainId] ?? const [];
     return exits[idOrName] ?? const [];
   }
 }
 
 // === 設施資料模型 ===
 class FacilityEntry {
-  final String title;        // 群組標題：詢問處、廁所...
-  final IconData icon;       // Icons.info_outline / Icons.wc / Icons.family_restroom...
-  final List<String> lines;  // 子彈點描述（多行）
+  final String title; // 群組標題：詢問處、廁所...
+  final IconData
+  icon; // Icons.info_outline / Icons.wc / Icons.family_restroom...
+  final List<String> lines; // 子彈點描述（多行）
   const FacilityEntry({
-    required this.title, 
-    required this.icon, 
-    required this.lines
+    required this.title,
+    required this.icon,
+    required this.lines,
   });
 }
 
@@ -457,29 +508,17 @@ class StationFacilities {
       FacilityEntry(
         title: '詢問處',
         icon: Icons.info_outline,
-        lines: [
-          '近出口 M3／M7／M8，近忠孝西路',
-          '近出口 M4／M5／M6，近忠孝西路',
-          '近出口 M1／M2，近市民大道',
-        ],
+        lines: ['近出口 M3／M7／M8，近忠孝西路', '近出口 M4／M5／M6，近忠孝西路', '近出口 M1／M2，近市民大道'],
       ),
       FacilityEntry(
         title: '廁所',
         icon: Icons.wc,
-        lines: [
-          '非付費區：近出口 M1／M2',
-          '付費區（板南線）',
-          '付費區（淡水信義線）',
-        ],
+        lines: ['非付費區：近出口 M1／M2', '付費區（板南線）', '付費區（淡水信義線）'],
       ),
       FacilityEntry(
         title: '親子無障礙廁所',
         icon: Icons.family_restroom,
-        lines: [
-          '非付費區：近出口 M1／M2',
-          '付費區（板南線）',
-          '付費區（淡水信義線）',
-        ],
+        lines: ['非付費區：近出口 M1／M2', '付費區（板南線）', '付費區（淡水信義線）'],
       ),
       FacilityEntry(
         title: '哺集乳室',
@@ -489,26 +528,28 @@ class StationFacilities {
       FacilityEntry(
         title: '嬰兒尿布臺',
         icon: Icons.baby_changing_station,
-        lines: [
-          '淡水信義線：親子無障礙廁所／男、女廁',
-          '板南線：付費區（哺集乳室／親子無障礙廁所／男、女廁）',
-        ],
+        lines: ['淡水信義線：親子無障礙廁所／男、女廁', '板南線：付費區（哺集乳室／親子無障礙廁所／男、女廁）'],
       ),
     ],
   };
 
   static List<FacilityEntry> of(String idOrName) {
-    if (idOrName.contains(taipeiMainName)) return data[taipeiMainId] ?? const [];
+    if (idOrName.contains(taipeiMainName))
+      return data[taipeiMainId] ?? const [];
     return data[idOrName] ?? const [];
   }
 }
 
 // === 公車轉乘資料模型 ===
 class BusTransferItem {
-  final String route;   // 路線編號：0東、14、1610...
-  final String stop;    // 站名：台北車站、台北轉運站...
-  final String exit;    // 對應出口：M1、M5、M7...
-  const BusTransferItem({required this.route, required this.stop, required this.exit});
+  final String route; // 路線編號：0東、14、1610...
+  final String stop; // 站名：台北車站、台北轉運站...
+  final String exit; // 對應出口：M1、M5、M7...
+  const BusTransferItem({
+    required this.route,
+    required this.stop,
+    required this.exit,
+  });
 }
 
 // === 台北車站（BL12R10）— 公車轉乘假資料 ===
@@ -518,9 +559,9 @@ class StationBusDummy {
 
   static final Map<String, List<BusTransferItem>> data = {
     taipeiMainId: [
-      BusTransferItem(route: '0東',  stop: '台北車站',   exit: 'M5'),
-      BusTransferItem(route: '14',   stop: '台北車站',   exit: 'M1'),
-      BusTransferItem(route: '14',   stop: '蘆洲',       exit: 'M7'),
+      BusTransferItem(route: '0東', stop: '台北車站', exit: 'M5'),
+      BusTransferItem(route: '14', stop: '台北車站', exit: 'M1'),
+      BusTransferItem(route: '14', stop: '蘆洲', exit: 'M7'),
       BusTransferItem(route: '1610', stop: '台北轉運站', exit: 'M1'),
       BusTransferItem(route: '1610', stop: '建國客運站', exit: 'M1'),
       BusTransferItem(route: '1611', stop: '台北轉運站', exit: 'M1'),
@@ -528,11 +569,11 @@ class StationBusDummy {
       BusTransferItem(route: '1613', stop: '台北轉運站', exit: 'M1'),
       BusTransferItem(route: '1613', stop: '屏東轉運站', exit: 'M1'),
       BusTransferItem(route: '1615', stop: '台北轉運站', exit: 'M1'),
-      BusTransferItem(route: '1615', stop: '彰化站',     exit: 'M1'),
+      BusTransferItem(route: '1615', stop: '彰化站', exit: 'M1'),
       BusTransferItem(route: '1616', stop: '台北轉運站', exit: 'M1'),
       BusTransferItem(route: '1616', stop: '員林轉運站', exit: 'M1'),
       BusTransferItem(route: '1617', stop: '台北轉運站', exit: 'M1'),
-      BusTransferItem(route: '1617', stop: '東勢站',     exit: 'M1'),
+      BusTransferItem(route: '1617', stop: '東勢站', exit: 'M1'),
       BusTransferItem(route: '1618', stop: '台北轉運站', exit: 'M1'),
       BusTransferItem(route: '1618', stop: '嘉義市轉運中心', exit: 'M1'),
       BusTransferItem(route: '1619', stop: '台北轉運站', exit: 'M1'),
@@ -541,7 +582,8 @@ class StationBusDummy {
   };
 
   static List<BusTransferItem> of(String idOrName) {
-    if (idOrName.contains(taipeiMainName)) return data[taipeiMainId] ?? const [];
+    if (idOrName.contains(taipeiMainName))
+      return data[taipeiMainId] ?? const [];
     return data[idOrName] ?? const [];
   }
 }
@@ -552,8 +594,8 @@ class _PinWidget extends StatelessWidget {
   final StationPin pin;
   final VoidCallback onTap;
 
-  static const double _hit = 28;   // 觸控熱區大小
-  static const double _dot = 10;   // 中心圓點（debug用，可隱藏）
+  static const double _hit = 28; // 觸控熱區大小
+  static const double _dot = 10; // 中心圓點（debug用，可隱藏）
 
   @override
   Widget build(BuildContext context) {
@@ -561,7 +603,7 @@ class _PinWidget extends StatelessWidget {
     const mapW = RouteInfoPage.kMapW;
     const mapH = RouteInfoPage.kMapH;
     final left = pin.fx * mapW - _hit / 2;
-    final top  = pin.fy * mapH - _hit / 2;
+    final top = pin.fy * mapH - _hit / 2;
 
     return Positioned(
       left: left,
@@ -593,7 +635,7 @@ class _StationInfoSheet extends StatefulWidget {
   final String stationName;
   final String stationId;
   final List<Map<String, dynamic>> trackData; // 新增列車資料參數
-  
+
   const _StationInfoSheet({
     this.stationName = '台北車站',
     this.stationId = 'BL12R10',
@@ -604,17 +646,18 @@ class _StationInfoSheet extends StatefulWidget {
   State<_StationInfoSheet> createState() => _StationInfoSheetState();
 }
 
-class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProviderStateMixin {
+class _StationInfoSheetState extends State<_StationInfoSheet>
+    with TickerProviderStateMixin {
   int selectedIndex = 0;
   final List<String> tabTitles = ['乘車資訊', '車站資訊', '站外資訊'];
   bool isFavorite = false;
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
-  
+
   // YouBike 相關狀態
   List<Map<String, dynamic>> youBikeStations = [];
   bool isLoadingYouBike = false;
-  
+
   // 公車排序狀態
   int busSortIndex = 1; // 0=依出口排序、1=依公車排序（預設如截圖為「依公車排序」）
 
@@ -625,13 +668,9 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    _scaleAnimation = Tween<double>(
-      begin: 1.0,
-      end: 1.2,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.elasticOut,
-    ));
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
+    );
   }
 
   @override
@@ -644,7 +683,7 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
     setState(() {
       isFavorite = !isFavorite;
     });
-    
+
     // 播放動畫
     _animationController.forward().then((_) {
       _animationController.reverse();
@@ -656,17 +695,21 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
     if (i != 2) return; // 只在「站外資訊」時呼叫
 
     setState(() => isLoadingYouBike = true);
-    
+
     print('🚲 呼叫 YouBike API（依站名）: ${widget.stationName}');
     try {
       // 也可改為 fetchYouBikeAll() 看全部
-      final bikes = await MetroApiService.fetchYouBikeByStation(widget.stationName);
+      final bikes = await MetroApiService.fetchYouBikeByStation(
+        widget.stationName,
+      );
       print('✅ YouBike 筆數: ${bikes.length}');
       for (int i = 0; i < bikes.length; i++) {
         final it = bikes[i];
-        final name = (it['StationName'] ?? it['name'] ?? it['sna'] ?? '').toString();
-        final lat  = (it['Latitude'] ?? it['lat'] ?? it['LAT'] ?? '').toString();
-        final lng  = (it['Longitude'] ?? it['lng'] ?? it['LNG'] ?? '').toString();
+        final name = (it['StationName'] ?? it['name'] ?? it['sna'] ?? '')
+            .toString();
+        final lat = (it['Latitude'] ?? it['lat'] ?? it['LAT'] ?? '').toString();
+        final lng = (it['Longitude'] ?? it['lng'] ?? it['LNG'] ?? '')
+            .toString();
         if (name.isNotEmpty || (lat.isNotEmpty && lng.isNotEmpty)) {
           print('  ${i + 1}. $name  ($lat, $lng)');
         } else {
@@ -751,20 +794,25 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
           // 第二行：三個按鈕
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(3, (i) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: ElevatedButton(
-                onPressed: () => _onSelectTab(i),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: selectedIndex == i ? const Color(0xFF26C6DA) : const Color(0xFF2A3A4A),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+            children: List.generate(
+              3,
+              (i) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: ElevatedButton(
+                  onPressed: () => _onSelectTab(i),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: selectedIndex == i
+                        ? const Color(0xFF26C6DA)
+                        : const Color(0xFF2A3A4A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
+                  child: Text(tabTitles[i]),
                 ),
-                child: Text(tabTitles[i]),
               ),
-            )),
+            ),
           ),
           const SizedBox(height: 12),
           // 下方內容區域
@@ -812,9 +860,9 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
     return ListView(
       padding: const EdgeInsets.only(bottom: 12),
       children: [
-        _buildYouBikeBlock(),   // 既有的 YouBike 視覺（改為非 Expanded 版）
+        _buildYouBikeBlock(), // 既有的 YouBike 視覺（改為非 Expanded 版）
         const SizedBox(height: 16),
-        _buildBusSection(),     // 新增：公車轉乘（假資料）
+        _buildBusSection(), // 新增：公車轉乘（假資料）
       ],
     );
   }
@@ -865,11 +913,7 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
             child: const Center(
               child: Column(
                 children: [
-                  Icon(
-                    Icons.location_off,
-                    size: 48,
-                    color: Colors.grey,
-                  ),
+                  Icon(Icons.location_off, size: 48, color: Colors.grey),
                   SizedBox(height: 12),
                   Text(
                     '未找到 YouBike 站點資料',
@@ -904,17 +948,21 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
   // 新增：公車轉乘區塊
   Widget _buildBusSection() {
     final items = List<BusTransferItem>.from(
-      StationBusDummy.of(widget.stationId.isNotEmpty ? widget.stationId : widget.stationName),
+      StationBusDummy.of(
+        widget.stationId.isNotEmpty ? widget.stationId : widget.stationName,
+      ),
     );
 
     // 排序
     if (busSortIndex == 0) {
-      items.sort((a, b) => a.exit.compareTo(b.exit));            // 出口排序
+      items.sort((a, b) => a.exit.compareTo(b.exit)); // 出口排序
     } else {
       // 公車排序：先 route，再 stop
-      items.sort((a, b) => a.route == b.route 
-          ? a.stop.compareTo(b.stop) 
-          : a.route.compareTo(b.route));
+      items.sort(
+        (a, b) => a.route == b.route
+            ? a.stop.compareTo(b.stop)
+            : a.route.compareTo(b.route),
+      );
     }
 
     return Container(
@@ -932,7 +980,14 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
               children: const [
                 Icon(Icons.directions_bus, color: Colors.white, size: 20),
                 SizedBox(width: 8),
-                Text('公車轉乘', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                Text(
+                  '公車轉乘',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
           ),
@@ -941,9 +996,17 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
-                _segBtn('依出口排序', selected: busSortIndex == 0, onTap: () => setState(() => busSortIndex = 0)),
+                _segBtn(
+                  '依出口排序',
+                  selected: busSortIndex == 0,
+                  onTap: () => setState(() => busSortIndex = 0),
+                ),
                 const SizedBox(width: 8),
-                _segBtn('依公車排序', selected: busSortIndex == 1, onTap: () => setState(() => busSortIndex = 1)),
+                _segBtn(
+                  '依公車排序',
+                  selected: busSortIndex == 1,
+                  onTap: () => setState(() => busSortIndex = 1),
+                ),
               ],
             ),
           ),
@@ -953,19 +1016,36 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemCount: items.length,
-            separatorBuilder: (_, __) => const Divider(height: 1, color: Colors.white12),
+            separatorBuilder: (_, __) =>
+                const Divider(height: 1, color: Colors.white12),
             itemBuilder: (context, i) {
               final it = items[i];
               return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     SizedBox(
                       width: 56,
-                      child: Text(it.route, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: Text(
+                        it.route,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                     Expanded(
-                      child: Text(it.stop, style: const TextStyle(color: Colors.white, fontSize: 16)),
+                      child: Text(
+                        it.stop,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
                     ),
                     _ExitBadge(it.exit),
                     const SizedBox(width: 6),
@@ -981,7 +1061,11 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
   }
 
   // 分段按鈕樣式（左灰右藍，對應你的截圖）
-  Widget _segBtn(String text, {required bool selected, required VoidCallback onTap}) {
+  Widget _segBtn(
+    String text, {
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -989,9 +1073,18 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
         decoration: BoxDecoration(
           color: selected ? const Color(0xFF2E77B8) : Colors.transparent,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: selected ? Colors.transparent : Colors.white30),
+          border: Border.all(
+            color: selected ? Colors.transparent : Colors.white30,
+          ),
         ),
-        child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }
@@ -1014,10 +1107,10 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
     sortedTrackData.sort((a, b) {
       String countDownA = a['CountDown']?.toString() ?? '';
       String countDownB = b['CountDown']?.toString() ?? '';
-      
+
       int secondsA = _parseCountDownToSeconds(countDownA);
       int secondsB = _parseCountDownToSeconds(countDownB);
-      
+
       return secondsA.compareTo(secondsB); // 升序排列，最小的（最接近）在前
     });
 
@@ -1026,7 +1119,11 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
       children: [
         const Text(
           '即時列車進站資訊',
-          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         const SizedBox(height: 12),
         Expanded(
@@ -1044,15 +1141,26 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
 
   // 新增：建構車站資訊的 Widget
   Widget _buildStationInfo() {
-    final exits = StationStaticData.exitsBy(widget.stationId.isNotEmpty ? widget.stationId : widget.stationName);
-    final facilities = StationFacilities.of(widget.stationId.isNotEmpty ? widget.stationId : widget.stationName);
+    final exits = StationStaticData.exitsBy(
+      widget.stationId.isNotEmpty ? widget.stationId : widget.stationName,
+    );
+    final facilities = StationFacilities.of(
+      widget.stationId.isNotEmpty ? widget.stationId : widget.stationName,
+    );
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 出口資訊區段
-          const Text('出口資訊', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text(
+            '出口資訊',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 12),
           if (exits.isNotEmpty) ...[
             // 圖例
@@ -1068,127 +1176,162 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
             ),
             const SizedBox(height: 16),
             // 出口清單
-            ...exits.map((exit) => Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2A3A4A),
-                borderRadius: BorderRadius.circular(8),
-                border: Border(
-                  left: BorderSide(
-                    color: const Color(0xFF26C6DA),
-                    width: 4,
-                  ),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
+            ...exits
+                .map(
+                  (exit) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2A3A4A),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border(
+                        left: BorderSide(
                           color: const Color(0xFF26C6DA),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          exit.code,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          width: 4,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          exit.desc,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      if (exit.accessible) const _MiniIcon(icon: Icons.accessible, label: '無障礙'),
-                      if (exit.elevator) const _MiniIcon(icon: Icons.elevator, label: '電梯'),
-                      if (exit.escalator) const _MiniIcon(icon: Icons.escalator, label: '電扶梯'),
-                      if (exit.stairs) const _MiniIcon(icon: Icons.stairs, label: '樓梯'),
-                    ],
-                  ),
-                ],
-              ),
-            )).toList(),
-          ] else ...[
-            const Text('目前尚無此站的出口資料', style: TextStyle(color: Colors.grey)),
-          ],
-          
-          const SizedBox(height: 20),
-          
-          // 設施資訊區段
-          const Text('其他設施／設備', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          if (facilities.isNotEmpty) ...[
-            ...facilities.map((facility) => Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2A3A4A),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    facility.icon, 
-                    size: 28, 
-                    color: Colors.white70,
-                    semanticLabel: facility.title,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          facility.title, 
-                          style: const TextStyle(
-                            color: Colors.white, 
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF26C6DA),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                exit.code,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                exit.desc,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 8),
-                        ...facility.lines.map((line) => Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text(
-                            '• $line', 
-                            style: const TextStyle(
-                              color: Colors.white, 
-                              fontSize: 13, 
-                              height: 1.4,
-                            ),
-                          ),
-                        )).toList(),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            if (exit.accessible)
+                              const _MiniIcon(
+                                icon: Icons.accessible,
+                                label: '無障礙',
+                              ),
+                            if (exit.elevator)
+                              const _MiniIcon(
+                                icon: Icons.elevator,
+                                label: '電梯',
+                              ),
+                            if (exit.escalator)
+                              const _MiniIcon(
+                                icon: Icons.escalator,
+                                label: '電扶梯',
+                              ),
+                            if (exit.stairs)
+                              const _MiniIcon(icon: Icons.stairs, label: '樓梯'),
+                          ],
+                        ),
                       ],
                     ),
                   ),
-                ],
-              ),
-            )).toList(),
+                )
+                .toList(),
+          ] else ...[
+            const Text('目前尚無此站的出口資料', style: TextStyle(color: Colors.grey)),
+          ],
+
+          const SizedBox(height: 20),
+
+          // 設施資訊區段
+          const Text(
+            '其他設施／設備',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (facilities.isNotEmpty) ...[
+            ...facilities
+                .map(
+                  (facility) => Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2A3A4A),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          facility.icon,
+                          size: 28,
+                          color: Colors.white70,
+                          semanticLabel: facility.title,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                facility.title,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              ...facility.lines
+                                  .map(
+                                    (line) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 4),
+                                      child: Text(
+                                        '• $line',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+                .toList(),
           ] else ...[
             const Text('目前尚無該站的設施資料', style: TextStyle(color: Colors.grey)),
           ],
-          
+
           const SizedBox(height: 16),
         ],
       ),
@@ -1221,7 +1364,7 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
     // 判斷倒數時間的顏色
     Color countDownColor = Colors.white;
     IconData statusIcon = Icons.train;
-    
+
     if (countDown.contains('進站')) {
       countDownColor = Colors.red;
       statusIcon = Icons.warning;
@@ -1246,12 +1389,7 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
       decoration: BoxDecoration(
         color: const Color(0xFF2A3A4A),
         borderRadius: BorderRadius.circular(8),
-        border: Border(
-          left: BorderSide(
-            color: countDownColor,
-            width: 4,
-          ),
-        ),
+        border: Border(left: BorderSide(color: countDownColor, width: 4)),
       ),
       child: Row(
         children: [
@@ -1275,7 +1413,10 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
                     if (trainNumber.isNotEmpty) ...[
                       Text(
                         '車次: $trainNumber',
-                        style: const TextStyle(color: Colors.grey, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
                       ),
                       const SizedBox(width: 12),
                     ],
@@ -1339,11 +1480,7 @@ class _StationInfoSheetState extends State<_StationInfoSheet> with TickerProvide
             child: const Center(
               child: Column(
                 children: [
-                  Icon(
-                    Icons.location_off,
-                    size: 48,
-                    color: Colors.grey,
-                  ),
+                  Icon(Icons.location_off, size: 48, color: Colors.grey),
                   SizedBox(height: 12),
                   Text(
                     '未找到 YouBike 站點資料',
@@ -1387,13 +1524,7 @@ class _MiniIcon extends StatelessWidget {
       children: [
         Icon(icon, size: 16, color: Colors.grey[400]),
         const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.grey[400],
-            fontSize: 12,
-          ),
-        ),
+        Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
       ],
     );
   }
@@ -1417,13 +1548,7 @@ class _Legend extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: Colors.grey[300]),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.grey[300],
-              fontSize: 12,
-            ),
-          ),
+          Text(label, style: TextStyle(color: Colors.grey[300], fontSize: 12)),
         ],
       ),
     );
@@ -1444,10 +1569,7 @@ class _YouBikeMapWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     if (stations.isEmpty) {
       return const Center(
-        child: Text(
-          '沒有YouBike站點資料',
-          style: TextStyle(color: Colors.grey),
-        ),
+        child: Text('沒有YouBike站點資料', style: TextStyle(color: Colors.grey)),
       );
     }
 
@@ -1460,30 +1582,47 @@ class _YouBikeMapWidget extends StatelessWidget {
     List<YouBikeStation> validStations = [];
 
     for (final station in stations) {
-      final latStr = (station['Latitude'] ?? station['lat'] ?? station['LAT'] ?? '').toString();
-      final lngStr = (station['Longitude'] ?? station['lng'] ?? station['LNG'] ?? '').toString();
-      final name = (station['StationName'] ?? station['name'] ?? station['sna'] ?? '').toString();
-      final available = (station['AvailableBikes'] ?? station['available'] ?? 0).toString();
-      final capacity = (station['TotalSlots'] ?? station['capacity'] ?? 0).toString();
+      final latStr =
+          (station['Latitude'] ?? station['lat'] ?? station['LAT'] ?? '')
+              .toString();
+      final lngStr =
+          (station['Longitude'] ?? station['lng'] ?? station['LNG'] ?? '')
+              .toString();
+      final name =
+          (station['StationName'] ?? station['name'] ?? station['sna'] ?? '')
+              .toString();
+      final available = (station['AvailableBikes'] ?? station['available'] ?? 0)
+          .toString();
+      final capacity = (station['TotalSlots'] ?? station['capacity'] ?? 0)
+          .toString();
 
       final lat = double.tryParse(latStr);
       final lng = double.tryParse(lngStr);
 
       // 更嚴格的座標驗證
-      if (lat != null && lng != null && 
-          !lat.isNaN && !lng.isNaN && 
-          !lat.isInfinite && !lng.isInfinite &&
-          lat != 0.0 && lng != 0.0 &&
-          lat >= -90 && lat <= 90 && // 有效緯度範圍
-          lng >= -180 && lng <= 180) { // 有效經度範圍
-        
-        validStations.add(YouBikeStation(
-          name: name.isNotEmpty ? name : '未知站點',
-          lat: lat,
-          lng: lng,
-          available: int.tryParse(available) ?? 0,
-          capacity: int.tryParse(capacity) ?? 0,
-        ));
+      if (lat != null &&
+          lng != null &&
+          !lat.isNaN &&
+          !lng.isNaN &&
+          !lat.isInfinite &&
+          !lng.isInfinite &&
+          lat != 0.0 &&
+          lng != 0.0 &&
+          lat >= -90 &&
+          lat <= 90 && // 有效緯度範圍
+          lng >= -180 &&
+          lng <= 180) {
+        // 有效經度範圍
+
+        validStations.add(
+          YouBikeStation(
+            name: name.isNotEmpty ? name : '未知站點',
+            lat: lat,
+            lng: lng,
+            available: int.tryParse(available) ?? 0,
+            capacity: int.tryParse(capacity) ?? 0,
+          ),
+        );
 
         // 更新邊界值
         if (minLat.isInfinite || lat < minLat) minLat = lat;
@@ -1497,26 +1636,24 @@ class _YouBikeMapWidget extends StatelessWidget {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24.0),
-          child: Text(
-            '無法解析YouBike站點座標',
-            style: TextStyle(color: Colors.grey),
-          ),
+          child: Text('無法解析YouBike站點座標', style: TextStyle(color: Colors.grey)),
         ),
       );
     }
 
     // 檢查邊界值是否有效
-    if (minLat.isInfinite || maxLat.isInfinite || 
-        minLng.isInfinite || maxLng.isInfinite ||
-        minLat.isNaN || maxLat.isNaN || 
-        minLng.isNaN || maxLng.isNaN) {
+    if (minLat.isInfinite ||
+        maxLat.isInfinite ||
+        minLng.isInfinite ||
+        maxLng.isInfinite ||
+        minLat.isNaN ||
+        maxLat.isNaN ||
+        minLng.isNaN ||
+        maxLng.isNaN) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24.0),
-          child: Text(
-            '座標邊界計算錯誤',
-            style: TextStyle(color: Colors.grey),
-          ),
+          child: Text('座標邊界計算錯誤', style: TextStyle(color: Colors.grey)),
         ),
       );
     }
@@ -1524,13 +1661,14 @@ class _YouBikeMapWidget extends StatelessWidget {
     // 確保最小邊界範圍，避免除以零
     final latRange = maxLat - minLat;
     final lngRange = maxLng - minLng;
-    
-    if (latRange < 0.0001) { // 如果範圍太小，設定最小範圍
+
+    if (latRange < 0.0001) {
+      // 如果範圍太小，設定最小範圍
       final center = (minLat + maxLat) / 2;
       minLat = center - 0.0001;
       maxLat = center + 0.0001;
     }
-    
+
     if (lngRange < 0.0001) {
       final center = (minLng + maxLng) / 2;
       minLng = center - 0.0001;
@@ -1549,7 +1687,11 @@ class _YouBikeMapWidget extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 '找到 ${validStations.length} 個 YouBike 站點',
-                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const Spacer(),
               const Icon(Icons.info_outline, color: Colors.grey, size: 16),
@@ -1582,10 +1724,10 @@ class _YouBikeMapWidget extends StatelessWidget {
             itemCount: validStations.length,
             itemBuilder: (context, index) {
               final station = validStations[index];
-              final availabilityRatio = station.capacity > 0 
-                  ? station.available / station.capacity 
+              final availabilityRatio = station.capacity > 0
+                  ? station.available / station.capacity
                   : 0.0;
-              
+
               Color statusColor = Colors.red;
               if (availabilityRatio > 0.3) statusColor = Colors.orange;
               if (availabilityRatio > 0.6) statusColor = Colors.green;
@@ -1605,7 +1747,7 @@ class _YouBikeMapWidget extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      station.name.length > 15 
+                      station.name.length > 15
                           ? '${station.name.substring(0, 15)}...'
                           : station.name,
                       style: const TextStyle(
@@ -1619,7 +1761,11 @@ class _YouBikeMapWidget extends StatelessWidget {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(Icons.directions_bike, color: statusColor, size: 14),
+                        Icon(
+                          Icons.directions_bike,
+                          color: statusColor,
+                          size: 14,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           '${station.available}/${station.capacity}',
@@ -1677,7 +1823,10 @@ class YouBikeMapPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     // 背景
     final backgroundPaint = Paint()..color = const Color(0xFF0D1B1F);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), backgroundPaint);
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      backgroundPaint,
+    );
 
     // 網格線
     final gridPaint = Paint()
@@ -1694,11 +1843,14 @@ class YouBikeMapPainter extends CustomPainter {
     // 檢查座標範圍是否有效
     final latRange = maxLat - minLat;
     final lngRange = maxLng - minLng;
-    
+
     // 避免除以零或無效範圍
-    if (latRange <= 0 || lngRange <= 0 || 
-        latRange.isNaN || lngRange.isNaN ||
-        latRange.isInfinite || lngRange.isInfinite) {
+    if (latRange <= 0 ||
+        lngRange <= 0 ||
+        latRange.isNaN ||
+        lngRange.isNaN ||
+        latRange.isInfinite ||
+        lngRange.isInfinite) {
       // 繪製錯誤訊息
       final textPainter = TextPainter(
         text: const TextSpan(
@@ -1708,35 +1860,42 @@ class YouBikeMapPainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       );
       textPainter.layout();
-      textPainter.paint(canvas, Offset(
-        size.width / 2 - textPainter.width / 2,
-        size.height / 2 - textPainter.height / 2,
-      ));
+      textPainter.paint(
+        canvas,
+        Offset(
+          size.width / 2 - textPainter.width / 2,
+          size.height / 2 - textPainter.height / 2,
+        ),
+      );
       return;
     }
 
     // 繪製YouBike站點
     for (final station in stations) {
       // 檢查站點座標是否有效
-      if (station.lat.isNaN || station.lng.isNaN ||
-          station.lat.isInfinite || station.lng.isInfinite) {
+      if (station.lat.isNaN ||
+          station.lng.isNaN ||
+          station.lat.isInfinite ||
+          station.lng.isInfinite) {
         continue; // 跳過無效座標
       }
 
       // 計算相對位置（0-1範圍）
       final relativeX = (station.lng - minLng) / lngRange;
       final relativeY = (station.lat - minLat) / latRange;
-      
+
       // 檢查相對位置是否有效
-      if (relativeX.isNaN || relativeY.isNaN ||
-          relativeX.isInfinite || relativeY.isInfinite) {
+      if (relativeX.isNaN ||
+          relativeY.isNaN ||
+          relativeX.isInfinite ||
+          relativeY.isInfinite) {
         continue; // 跳過無效計算結果
       }
 
       // 轉換為畫布座標
       final x = relativeX * size.width;
       final y = size.height - (relativeY * size.height); // Y軸翻轉
-      
+
       // 最終檢查畫布座標
       if (x.isNaN || y.isNaN || x.isInfinite || y.isInfinite) {
         continue; // 跳過無效的畫布座標
@@ -1747,10 +1906,10 @@ class YouBikeMapPainter extends CustomPainter {
         continue; // 跳過超出範圍的座標
       }
 
-      final availabilityRatio = station.capacity > 0 
-          ? station.available / station.capacity 
+      final availabilityRatio = station.capacity > 0
+          ? station.available / station.capacity
           : 0.0;
-      
+
       Color statusColor = Colors.red;
       if (availabilityRatio > 0.3) statusColor = Colors.orange;
       if (availabilityRatio > 0.6) statusColor = Colors.green;
@@ -1759,7 +1918,7 @@ class YouBikeMapPainter extends CustomPainter {
       final stationPaint = Paint()
         ..color = statusColor
         ..style = PaintingStyle.fill;
-      
+
       final borderPaint = Paint()
         ..color = Colors.white
         ..style = PaintingStyle.stroke
@@ -1784,10 +1943,12 @@ class YouBikeMapPainter extends CustomPainter {
         textPainter.layout();
         final textX = x - textPainter.width / 2;
         final textY = y - textPainter.height / 2;
-        
+
         // 檢查文字座標是否有效
-        if (!textX.isNaN && !textY.isNaN && 
-            !textX.isInfinite && !textY.isInfinite) {
+        if (!textX.isNaN &&
+            !textY.isNaN &&
+            !textX.isInfinite &&
+            !textY.isInfinite) {
           textPainter.paint(canvas, Offset(textX, textY));
         }
       }
@@ -1805,7 +1966,7 @@ class YouBikeMapPainter extends CustomPainter {
     for (final item in legendItems) {
       final paint = Paint()..color = item['color'] as Color;
       canvas.drawCircle(Offset(legendX + 6, legendY), 4, paint);
-      
+
       final textPainter = TextPainter(
         text: TextSpan(
           text: item['text'] as String,
@@ -1835,7 +1996,13 @@ class _ExitBadge extends StatelessWidget {
         color: const Color(0xFFFFD54F), // 黃色
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Text(code, style: const TextStyle(color: Color(0xFF114488), fontWeight: FontWeight.w900)),
+      child: Text(
+        code,
+        style: const TextStyle(
+          color: Color(0xFF114488),
+          fontWeight: FontWeight.w900,
+        ),
+      ),
     );
   }
 }

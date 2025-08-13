@@ -7,7 +7,7 @@ class StationsData {
     '淡水信義線': ['淡水', '象山'],
     '松山新店線': ['松山', '新店'], // 含小碧潭支線
     '中和新蘆線': ['南勢角', '蘆洲/迴龍'],
-    '板南線': ['南港展覽館', '頂埔'],
+    '板南線': ['南港展覽館', '頂埔', '昆陽', '亞東醫院'],
     '文湖線': ['南港展覽館', '動物園'],
     '環狀線': ['新北產業園區', '大坪林'],
   };
@@ -184,9 +184,58 @@ class StationsData {
     return lines;
   }
 
+  // 各線兩個方向的可能終點（包含常見回折站）
+  // directions: [dirA, dirB]，每個方向是一組可能目的地（不含「站」字）
+  static const Map<String, List<List<String>>> lineDirectionTerminals = {
+    '淡水信義線': [
+      ['淡水', '北投'],
+      ['象山'],
+    ],
+    '松山新店線': [
+      ['松山'],
+      ['新店', '台電大樓', '小碧潭'],
+    ],
+    '中和新蘆線': [
+      ['蘆洲', '迴龍'],
+      ['南勢角'],
+    ],
+    '板南線': [
+      ['南港展覽館', '昆陽'],
+      ['頂埔', '亞東醫院'],
+    ],
+    '文湖線': [
+      ['南港展覽館'],
+      ['動物園'],
+    ],
+    '環狀線': [
+      ['新北產業園區'],
+      ['大坪林'],
+    ],
+  };
+
+  static List<List<String>> directionsForLine(String lineName) {
+    return lineDirectionTerminals[lineName] ?? const [[], []];
+  }
+
+  // 回傳目的地在該線屬於哪個方向（0 或 1）。若無法判斷回傳 null。
+  static int? whichDirection(String lineName, String destination) {
+    final dest = destination.replaceAll('站', '');
+    final dirs = directionsForLine(lineName);
+    if (dirs.isEmpty) return null;
+    if (dirs[0].any((d) => dest.contains(d))) return 0;
+    if (dirs.length > 1 && dirs[1].any((d) => dest.contains(d))) return 1;
+    return null;
+  }
+
   // 依據目的地判斷所屬路線（以端點為準），若無法判斷回傳 null
   static String? lineForDestination(String destination) {
     final String dest = destination.replaceAll('站', '');
+    // 先以完整站名所屬線判定（可涵蓋非端點，如「亞東醫院」）
+    for (final entry in lineStations.entries) {
+      if (entry.value.contains(dest)) {
+        return entry.key;
+      }
+    }
     for (final entry in lineEndpoints.entries) {
       // 端點可能以「蘆洲/迴龍」這類複合字串呈現，需拆分判斷
       final List<String> endpoints = entry.value

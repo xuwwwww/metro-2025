@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 // import '../widgets/adaptive_text.dart'; // unused
 import '../utils/global_login_state.dart';
-import 'chat_page.dart';
 import 'customize_functions_page.dart';
 import 'dart:async'; // Added for Timer
 import 'edit_favorite_stations_page.dart'; // Added for EditFavoriteStationsPage
 import 'route_info_page.dart'
     show MetroApiService; // Reuse API service for track info
 import '../utils/stations_data.dart';
+import 'my_account_page.dart';
+import '../main.dart';
+import 'info_page.dart';
 
 // 單筆站點到站資訊（本地倒數用）
 class StationArrival {
@@ -19,11 +20,13 @@ class StationArrival {
     required this.lineName,
     required this.baseSeconds,
     required this.baseTimeMs,
+    required this.isArriving,
   });
   final String destination;
   final String? lineName; // 所屬路線名稱
-  final int baseSeconds; // 當下 API 回傳的倒數秒數
+  final int baseSeconds; // 當下 API 回傳的倒數秒數（若進站則為0）
   final int baseTimeMs; // 由 NowDateTime 解析出的毫秒時間
+  final bool isArriving; // 是否為「列車進站」狀態
 }
 
 class HomePage extends StatefulWidget {
@@ -34,8 +37,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
   // 已選擇的功能
   List<FunctionItem> selectedFunctions = [];
 
@@ -79,7 +80,7 @@ class _HomePageState extends State<HomePage> {
   // 最新消息數據
   List<Map<String, String>> newsItems = [
     {
-      'title': 'Family Mart x 台北捷運',
+      'title': 'Family Nart x 台北捷運',
       'content': 'Lorem ipsum dolor sit amet consectetur adipiscing elit',
       'image': 'assets/images/news1.jpg',
     },
@@ -89,7 +90,7 @@ class _HomePageState extends State<HomePage> {
       'image': 'assets/images/news2.jpg',
     },
     {
-      'title': 'Family Mart x 台北捷',
+      'title': 'Family Nart x 台北捷運',
       'content': 'Lorem ipsum dolor sit amet consectetur adipiscing elit',
       'image': 'assets/images/news3.jpg',
     },
@@ -109,53 +110,82 @@ class _HomePageState extends State<HomePage> {
     final bool isLoggedIn =
         GlobalLoginState.isLoggedIn && GlobalLoginState.userName.isNotEmpty;
     final String name = isLoggedIn ? GlobalLoginState.userName : '未登入';
+    final String uid = GlobalLoginState.currentUid ?? '—';
     final Color border = const Color(0xFF114D4D);
     final Color bg = isLoggedIn
         ? const Color(0xFF1F3B45)
         : const Color(0xFF2A3A4A);
     final Color accent = isLoggedIn ? const Color(0xFF26C6DA) : Colors.grey;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: border, width: 1),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: accent.withValues(alpha: 0.2),
-            child: Icon(Icons.person, color: accent, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isLoggedIn ? '已登入' : '尚未登入',
-                  style: TextStyle(
-                    color: accent,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  name,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+    return InkWell(
+      onTap: () {
+        // 直接切換底部分頁到「我的帳戶」，並自動開啟「帳戶設定」
+        final stateKey = MainScaffold.globalKey;
+        final currentContext = stateKey.currentContext;
+        if (currentContext != null) {
+          (stateKey.currentState as dynamic).selectTab(
+            4,
+            openAccountDialog: true,
+          );
+        } else {
+          // 後備：若無法取得 globalKey，退回 push
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const MyAccountPage(autoOpenAccountDialog: true),
             ),
-          ),
-        ],
+          );
+        }
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: border, width: 1),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: accent.withValues(alpha: 0.2),
+              child: Icon(Icons.person, color: accent, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Row(
+                children: [
+                  Text(
+                    isLoggedIn ? '已登入' : '尚未登入',
+                    style: TextStyle(
+                      color: accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'UID: $uid',
+                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -175,6 +205,7 @@ class _HomePageState extends State<HomePage> {
   // 每秒倒數計時器（本地遞減，不打API）
   void _startCountdownTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
       setState(() {
         _currentSecond = (_currentSecond + 1) % 60;
         _updateStationTimes();
@@ -186,10 +217,10 @@ class _HomePageState extends State<HomePage> {
   void _startPollingArrivals() {
     // 先立即抓一次，之後每30秒再抓
     _fetchArrivals();
-    _pollTimer = Timer.periodic(
-      const Duration(seconds: 30),
-      (_) => _fetchArrivals(),
-    );
+    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!mounted) return;
+      _fetchArrivals();
+    });
   }
 
   // 取得所有站點的最新列車資訊並更新常用站點的兩個方向（含路線與時間基準）
@@ -219,11 +250,13 @@ class _HomePageState extends State<HomePage> {
               final nowStr = e['NowDateTime']?.toString() ?? '';
               final baseMs = _parseNowDateTimeMs(nowStr);
               final lineName = StationsData.lineForDestination(destination);
+              final bool isArriving = countDown.contains('進站');
               return StationArrival(
                 destination: destination,
                 lineName: lineName,
                 baseSeconds: baseSeconds,
                 baseTimeMs: baseMs,
+                isArriving: isArriving,
               );
             })
             .whereType<StationArrival>()
@@ -246,6 +279,7 @@ class _HomePageState extends State<HomePage> {
 
       // 套用至畫面資料
       final fetchMs = DateTime.now().millisecondsSinceEpoch;
+      if (!mounted) return;
       setState(() {
         stationArrivals
           ..clear()
@@ -382,6 +416,15 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // 兼容舊資料：某些熱重載下的舊物件可能沒有 isArriving 欄位
+  bool _safeIsArriving(StationArrival item) {
+    try {
+      return item.isArriving;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // 解析 API 提供的 CountDown 字串為秒數
   // 支援格式：'MM:SS' 或 包含 '進站' -> 視為 0 秒
   int? _parseCountDownToSeconds(String countDown) {
@@ -501,27 +544,88 @@ class _HomePageState extends State<HomePage> {
     return SafeArea(
       child: Column(
         children: [
-          // 頂部標題欄
+          // 頂部標題欄（高度更扁，字更小，右側語言設定）
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 16),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
             color: const Color(0xFF22303C),
-            child: const Center(
-              child: Text(
-                '台北捷運',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Center(
+                    child: Text(
+                      '台北捷運',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            backgroundColor: const Color(0xFF22303C),
+                            title: const Text(
+                              '語言設定',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                ListTile(
+                                  title: Text(
+                                    '中文',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                ),
+                                ListTile(
+                                  title: Text(
+                                    'English',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text(
+                                  '關閉',
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      icon: const Icon(
+                        Icons.language,
+                        color: Colors.white70,
+                        size: 18,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                      splashRadius: 18,
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
 
           // 主要內容區域
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(14.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -530,7 +634,7 @@ class _HomePageState extends State<HomePage> {
                   // 常用站點區塊
                   _buildFrequentStationsSection(),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 12),
 
                   // 常用功能區塊
                   _buildFrequentFunctionsSection(),
@@ -599,10 +703,17 @@ class _HomePageState extends State<HomePage> {
             ...frequentStations.map((station) {
               // 根據站所屬線動態背景（多線時疊加漸層）
               final lines = StationsData.linesForStation(station['name']);
-              final List<Color> bgColors = lines
+              final List<Color> baseColors = lines
                   .take(2)
                   .map((l) => Color(StationsData.lineColors[l] ?? 0xFF22303C))
                   .toList();
+              // 棕線（文湖線）提高不透明度讓顏色更明顯
+              final List<Color> bgColors = [];
+              for (int i = 0; i < baseColors.length; i++) {
+                final String lineName = i < lines.length ? lines[i] : '';
+                final double alpha = lineName == '文湖線' ? 0.35 : 0.20;
+                bgColors.add(baseColors[i].withValues(alpha: alpha));
+              }
               final BoxDecoration boxDeco = bgColors.length <= 1
                   ? BoxDecoration(
                       color: const Color(0xFF22303C),
@@ -615,16 +726,15 @@ class _HomePageState extends State<HomePage> {
                   : BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.centerLeft,
-                        end: const Alignment(0.866, 0.5), // 45° 斜向
-                        colors: [
-                          bgColors[0].withValues(alpha: 0.20),
-                          bgColors[1].withValues(alpha: 0.20),
-                        ],
+                        end: const Alignment(0.866, 0.5), // 60° 斜向
+                        colors: bgColors.length == 1
+                            ? [bgColors[0], bgColors[0]]
+                            : [bgColors[0], bgColors[1]],
                       ),
                       color: const Color(0xFF22303C),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: const Color(0xFF114D4D),
+                        color: const Color.fromARGB(255, 12, 47, 77),
                         width: 1,
                       ),
                     );
@@ -907,28 +1017,69 @@ class _HomePageState extends State<HomePage> {
       byLine.putIfAbsent(line, () => []).add(a);
     }
 
-    // 以每條線的最早到站時間排序，最多取兩線，每線最多兩筆 → 最多四筆
-    final List<String> sortedLines = byLine.keys.toList()
-      ..sort((a, b) {
-        final la = byLine[a]!
-          ..sort((x, y) => x.baseSeconds.compareTo(y.baseSeconds));
-        final lb = byLine[b]!
-          ..sort((x, y) => x.baseSeconds.compareTo(y.baseSeconds));
-        final va = (la.isNotEmpty ? la.first.baseSeconds : 1 << 30);
-        final vb = (lb.isNotEmpty ? lb.first.baseSeconds : 1 << 30);
-        return va.compareTo(vb);
-      });
-    for (final line in sortedLines.take(2)) {
-      final list = byLine[line]!
+    // 站名對應的固定兩線（最多兩線），若資料含更多線依最短到站優先挑兩線
+    List<String> candidateLines = byLine.keys.toList();
+    candidateLines.sort((a, b) {
+      final la = byLine[a]!
+        ..sort((x, y) => x.baseSeconds.compareTo(y.baseSeconds));
+      final lb = byLine[b]!
+        ..sort((x, y) => x.baseSeconds.compareTo(y.baseSeconds));
+      final va = (la.isNotEmpty ? la.first.baseSeconds : 1 << 30);
+      final vb = (lb.isNotEmpty ? lb.first.baseSeconds : 1 << 30);
+      return va.compareTo(vb);
+    });
+    final List<String> chosenLines = candidateLines.take(2).toList();
+    // 為每線固定輸出兩個方向（0/1），若缺少資料則視為「進站」佔位
+    for (final line in chosenLines) {
+      final list = (byLine[line] ?? [])
         ..sort((a, b) => a.baseSeconds.compareTo(b.baseSeconds));
       final color = Color(StationsData.lineColors[line] ?? 0xFF26C6DA);
-      for (int i = 0; i < list.length && i < 2; i++) {
-        final r = _remainingSeconds(list[i].baseSeconds, list[i].baseTimeMs);
-        final text =
-            '${r <= 0 ? '進站' : _formatSeconds(r)} | 往 ${list[i].destination}';
-        chips.add(_buildArrivalChip(text, color));
-        chips.add(const SizedBox(height: 8));
+      // 依方向分組
+      final List<StationArrival> dir0 = [];
+      final List<StationArrival> dir1 = [];
+      for (final item in list) {
+        final d = StationsData.whichDirection(line, item.destination);
+        if (d == 0)
+          dir0.add(item);
+        else if (d == 1)
+          dir1.add(item);
       }
+      dir0.sort((a, b) => a.baseSeconds.compareTo(b.baseSeconds));
+      dir1.sort((a, b) => a.baseSeconds.compareTo(b.baseSeconds));
+      // 方向0
+      if (dir0.isNotEmpty) {
+        final item = dir0.first;
+        final r = _remainingSeconds(item.baseSeconds, item.baseTimeMs);
+        final arriving = (_safeIsArriving(item) || r <= 0);
+        final text = arriving
+            ? '往 ${item.destination} | 進站中'
+            : '往 ${item.destination} | ${_formatSeconds(r)}';
+        chips.add(_buildArrivalChip(text, color));
+      } else {
+        final dirNames = StationsData.directionsForLine(line);
+        final fallback = dirNames.isNotEmpty && dirNames[0].isNotEmpty
+            ? dirNames[0].first
+            : '—';
+        chips.add(_buildArrivalChip('往 $fallback | 進站中', color));
+      }
+      chips.add(const SizedBox(height: 8));
+      // 方向1
+      if (dir1.isNotEmpty) {
+        final item = dir1.first;
+        final r = _remainingSeconds(item.baseSeconds, item.baseTimeMs);
+        final arriving = (_safeIsArriving(item) || r <= 0);
+        final text = arriving
+            ? '往 ${item.destination} | 進站中'
+            : '往 ${item.destination} | ${_formatSeconds(r)}';
+        chips.add(_buildArrivalChip(text, color));
+      } else {
+        final dirNames = StationsData.directionsForLine(line);
+        final fallback = dirNames.length > 1 && dirNames[1].isNotEmpty
+            ? dirNames[1].first
+            : '—';
+        chips.add(_buildArrivalChip('往 $fallback | 進站中', color));
+      }
+      chips.add(const SizedBox(height: 8));
     }
 
     if (chips.isNotEmpty && chips.last is SizedBox) {
@@ -1033,46 +1184,30 @@ class _HomePageState extends State<HomePage> {
 
   // 遺失物協尋
   void _showLostAndFound() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF22303C),
-        title: const Text(
-          '遺失物協尋',
-          style: TextStyle(color: Colors.white),
-          textAlign: TextAlign.center,
-        ),
-        content: const Text('遺失物協尋服務', style: TextStyle(color: Colors.white)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('確定', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
+    // 導向 資訊 > 一般 分頁，並切到「失物協尋」聊天
+    MainScaffold.globalKey.currentState?.selectTab(1);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // 切到資訊 > 一般 > 失物協尋
+      final info = InfoPage.globalKey.currentState;
+      if (info == null) return;
+      info.setState(() {
+        info.active = info.active; // 觸發重建
+      });
+      info.openGeneral(tab: 'lost');
+    });
   }
 
   // 緊急救助
   void _showEmergencyHelp() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF22303C),
-        title: const Text(
-          '緊急救助',
-          style: TextStyle(color: Colors.white),
-          textAlign: TextAlign.center,
-        ),
-        content: const Text('緊急救助服務', style: TextStyle(color: Colors.white)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('確定', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
+    MainScaffold.globalKey.currentState?.selectTab(1);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final info = InfoPage.globalKey.currentState;
+      if (info == null) return;
+      info.setState(() {
+        info.active = info.active;
+      });
+      info.openGeneral(tab: 'emergency');
+    });
   }
 
   // 會員資訊
@@ -1106,94 +1241,16 @@ class _HomePageState extends State<HomePage> {
 
   // 打開聊天
   void _openChat() {
-    // 檢查用戶是否已登入
-    if (!GlobalLoginState.isLoggedIn) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('請先登入後再使用聊天功能')));
-      return;
-    }
-
-    // 顯示聊天室選擇對話框
-    _showRoomSelectionDialog();
+    // 直接導向 資訊 > 共乘
+    final stateKey = MainScaffold.globalKey;
+    stateKey.currentState?.selectTab(1); // 切到資訊
+    // 開啟共乘子頁並自動選單一聊天室（若只有一個）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      InfoPage.globalKey.currentState?.openRideshare();
+    });
   }
 
-  // 顯示聊天室選擇對話框
-  void _showRoomSelectionDialog() async {
-    try {
-      // 獲取用戶有權限的聊天室
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(GlobalLoginState.currentUid)
-          .get();
-      final permissions = List<String>.from(
-        userDoc.data()?['permissions'] ?? [],
-      );
-
-      if (permissions.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('您還沒有加入任何聊天室，請先在設定中選擇聊天室')),
-        );
-        return;
-      }
-
-      // 顯示聊天室選擇對話框
-      final selectedRoom = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF22303C),
-          title: const Text(
-            '選擇聊天室',
-            style: TextStyle(color: Colors.white),
-            textAlign: TextAlign.center,
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: permissions.length,
-              itemBuilder: (context, index) {
-                final roomId = permissions[index];
-                return ListTile(
-                  title: Text(
-                    roomId,
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  onTap: () => Navigator.of(context).pop(roomId),
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消', style: TextStyle(color: Colors.grey)),
-            ),
-          ],
-        ),
-      );
-
-      if (selectedRoom != null) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatPage(
-              currentUid: GlobalLoginState.currentUid!,
-              roomId: selectedRoom,
-              profile: {
-                'displayName': GlobalLoginState.userName,
-                'avatarUrl': '',
-              },
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('載入聊天室失敗: $e')));
-    }
-  }
+  // 原本的聊天室選擇對話框已改為導向資訊>共乘
 
   void _openEditFavoriteStations() async {
     // 頁面需要：目前名單 favoriteStationNames，返回回調更新
