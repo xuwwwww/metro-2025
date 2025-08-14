@@ -33,7 +33,7 @@ class _InfoPageState extends State<InfoPage> {
   // 進入資訊頁的轉場
   bool _showTransition = true;
   double _transitionOpacity = 0.0; // 從0淡入
-  int _gifDurationMs = 200; // 可依不同檔案調整
+  final int _gifDurationMs = 1600;
 
   // 一般分頁子選單（預設一般客服）
   _GeneralSubTab _generalTab = _GeneralSubTab.support;
@@ -133,13 +133,24 @@ class _InfoPageState extends State<InfoPage> {
   }
 
   void _startTransition() async {
-    setState(() => _transitionOpacity = 1.0);
-    await Future.delayed(Duration(milliseconds: _gifDurationMs - 200));
+    const int fadeMs = 150; // 與 AnimatedOpacity 的 duration 保持一致
+    setState(() => _transitionOpacity = 1.0); // 淡入 300ms
+    final int plateau = (_gifDurationMs - 2 * fadeMs).clamp(0, _gifDurationMs);
+    await Future.delayed(Duration(milliseconds: plateau));
     if (!mounted) return;
-    // 再淡出
+    // 淡出 300ms，總時長 ≈ fadeIn + plateau + fadeOut = _gifDurationMs
     setState(() => _transitionOpacity = 0.0);
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: fadeMs));
     if (mounted) setState(() => _showTransition = false);
+  }
+
+  // 供外部或頁籤切換時重新播放轉場
+  void restartTransition() {
+    setState(() {
+      _showTransition = true;
+      _transitionOpacity = 0.0;
+    });
+    _startTransition();
   }
 
   @override
@@ -380,19 +391,6 @@ class _InfoPageState extends State<InfoPage> {
             fontWeight: FontWeight.bold,
           ),
         );
-    }
-  }
-
-  Widget _buildContentCard() {
-    switch (active) {
-      case _InfoSection.general:
-        return _generalCard();
-      case _InfoSection.rideshare:
-        return _rideshareCard();
-      case _InfoSection.chat:
-        return _chatCard();
-      case _InfoSection.music:
-        return _musicCard();
     }
   }
 
@@ -787,8 +785,10 @@ class _InfoPageState extends State<InfoPage> {
       onResult: (r) {
         setState(() => _chatController.text = r.recognizedWords);
       },
-      listenMode: stt.ListenMode.confirmation,
-      partialResults: true,
+      listenOptions: stt.SpeechListenOptions(
+        partialResults: true,
+        listenMode: stt.ListenMode.confirmation,
+      ),
       localeId: Platform.localeName,
     );
   }
@@ -1214,8 +1214,10 @@ class _InfoPageState extends State<InfoPage> {
       onResult: (r) {
         setState(() => _rideController.text = r.recognizedWords);
       },
-      listenMode: stt.ListenMode.confirmation,
-      partialResults: true,
+      listenOptions: stt.SpeechListenOptions(
+        partialResults: true,
+        listenMode: stt.ListenMode.confirmation,
+      ),
       localeId: Platform.localeName,
     );
   }
@@ -1341,10 +1343,12 @@ class _InfoPageState extends State<InfoPage> {
           _activeRideRoom = null;
         }
       });
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('已退出 $lineName')));
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('退出失敗: $e')));
@@ -1584,49 +1588,11 @@ class _InfoPageState extends State<InfoPage> {
     );
   }
 
-  Widget _cardWrapper({required List<Widget> children, EdgeInsets? padding}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF3A4A5A),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: padding ?? const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      ),
-    );
-  }
+  // _cardWrapper removed (unused)
 
-  Widget _navHeader({String title = '文字導航'}) {
-    return Row(
-      children: [
-        const Icon(Icons.expand_more, color: Colors.white70, size: 20),
-        const SizedBox(width: 6),
-        Text(
-          title,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.9),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    );
-  }
+  // _navHeader removed (unused)
 
-  Widget _navItem(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          const SizedBox(width: 22),
-          const Icon(Icons.circle, size: 6, color: Colors.white54),
-          const SizedBox(width: 8),
-          Text(text, style: const TextStyle(color: Colors.white70)),
-        ],
-      ),
-    );
-  }
+  // _navItem removed (unused)
 
   Widget _chatroomJoinTile(String lineName) {
     final bool hasPerm = _userPermissions.contains(lineName);
@@ -1694,10 +1660,12 @@ class _InfoPageState extends State<InfoPage> {
         'permissions': FieldValue.arrayUnion([lineName]),
       });
       setState(() => _userPermissions.add(lineName));
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('已加入 $lineName')));
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('加入失敗: $e')));

@@ -29,7 +29,6 @@ class _MyAccountPageState extends State<MyAccountPage> {
   double _fontSize = FontSizeManager.defaultFontSize;
 
   // 聊天室列表與選擇
-  List<String> _allRooms = [];
   Set<String> _selectedRooms = {};
 
   // 移除最新消息數據
@@ -37,7 +36,6 @@ class _MyAccountPageState extends State<MyAccountPage> {
   @override
   void initState() {
     super.initState();
-    _loadAllRooms();
     // 從全局狀態載入登入狀態
     _loadGlobalLoginState();
     // 如果已經登入，載入用戶權限
@@ -82,20 +80,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
     });
   }
 
-  // 讀取所有聊天室 ID
-  Future<void> _loadAllRooms() async {
-    try {
-      final snap = await _firestore.collection('chatRooms').get();
-      setState(() {
-        _allRooms = snap.docs.map((d) => d.id).toList();
-      });
-    } catch (e) {
-      // 如果 Firestore 未初始化或沒有聊天室，使用預設列表
-      setState(() {
-        _allRooms = ['room1', 'room2', 'room3'];
-      });
-    }
-  }
+  // （移除）讀取所有聊天室 ID：未使用 _allRooms
 
   // 讀取當前使用者的聊天室權限
   Future<void> _loadUserPermissions() async {
@@ -240,36 +225,6 @@ class _MyAccountPageState extends State<MyAccountPage> {
           onTap: _showFontSettings,
         ),
       ],
-    );
-  }
-
-  // 功能按鈕
-  Widget _buildFunctionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 80,
-        decoration: BoxDecoration(
-          color: const Color(0xFF22303C),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFF114D4D), width: 1),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: const Color(0xFF26C6DA), size: 24),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -930,7 +885,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
       final snap = await tx.get(docRef);
       int counter = 1;
       if (snap.exists) {
-        final data = snap.data() as Map<String, dynamic>?;
+        final data = snap.data();
         final value = data?['uidCounter'];
         if (value is int) counter = value;
         if (value is String && int.tryParse(value) != null)

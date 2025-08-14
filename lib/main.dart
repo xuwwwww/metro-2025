@@ -38,19 +38,21 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Metro App',
       theme: ThemeData(
-        colorScheme: ColorScheme(
-          brightness: Brightness.dark,
-          primary: Color(0xFF114D4D),
-          onPrimary: Colors.white,
-          secondary: Color(0xFF0A2E36),
-          onSecondary: Colors.white,
-          error: Colors.red.shade400,
-          onError: Colors.white,
-          background: Color(0xFF1A2327),
-          onBackground: Colors.white,
-          surface: Color(0xFF22303C),
-          onSurface: Colors.white,
-        ),
+        colorScheme:
+            ColorScheme.fromSeed(
+              brightness: Brightness.dark,
+              seedColor: const Color(0xFF114D4D),
+            ).copyWith(
+              primary: const Color(0xFF114D4D),
+              onPrimary: Colors.white,
+              secondary: const Color(0xFF0A2E36),
+              onSecondary: Colors.white,
+              error: Colors.red.shade400,
+              onError: Colors.white,
+              background: const Color(0xFF1A2327),
+              surface: const Color(0xFF22303C),
+              onSurface: Colors.white,
+            ),
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFF1A2327),
         appBarTheme: const AppBarTheme(
