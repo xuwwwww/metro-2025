@@ -249,4 +249,48 @@ class StationsData {
     }
     return null;
   }
+
+  // 依據車站與目的地共同判斷路線：若目的地同時存在多條線，優先回傳包含該「車站」的那條線
+  static String? lineForDestinationAtStation(
+    String stationName,
+    String destination,
+  ) {
+    final String station = stationName.replaceAll('站', '');
+    final String dest = destination.replaceAll('站', '');
+    // 找出所有目的地可能所屬線
+    final List<String> candidateLines = [];
+    for (final entry in lineStations.entries) {
+      if (entry.value.contains(dest)) {
+        candidateLines.add(entry.key);
+      }
+    }
+    if (candidateLines.isEmpty) {
+      for (final entry in lineEndpoints.entries) {
+        final List<String> endpoints = entry.value
+            .expand((raw) => raw.split('/'))
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+        if (endpoints.any((end) => dest.contains(end))) {
+          candidateLines.add(entry.key);
+        }
+      }
+    }
+    if (candidateLines.isEmpty) return null;
+
+    // 以該站所在之線交集過濾，提高正確性（例如：板橋 => 板南線/環狀線，目的地「大坪林」時應選環狀線）
+    final List<String> stationLines = linesForStation(station);
+    final List<String> intersection = candidateLines
+        .where((line) => stationLines.contains(line))
+        .toList();
+    if (intersection.isNotEmpty) {
+      // 盡量遵循 stationLines 的順序（如有必要）
+      for (final sl in stationLines) {
+        if (intersection.contains(sl)) return sl;
+      }
+      return intersection.first;
+    }
+    // 若無交集，回退原先的第一個候選
+    return candidateLines.first;
+  }
 }

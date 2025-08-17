@@ -1588,12 +1588,6 @@ class _InfoPageState extends State<InfoPage> {
     );
   }
 
-  // _cardWrapper removed (unused)
-
-  // _navHeader removed (unused)
-
-  // _navItem removed (unused)
-
   Widget _chatroomJoinTile(String lineName) {
     final bool hasPerm = _userPermissions.contains(lineName);
     return Padding(

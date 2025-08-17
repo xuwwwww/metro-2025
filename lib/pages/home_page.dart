@@ -249,7 +249,10 @@ class _HomePageState extends State<HomePage> {
               if (baseSeconds == null) return null;
               final nowStr = e['NowDateTime']?.toString() ?? '';
               final baseMs = _parseNowDateTimeMs(nowStr);
-              final lineName = StationsData.lineForDestination(destination);
+              final lineName = StationsData.lineForDestinationAtStation(
+                stationName,
+                destination,
+              );
               final bool isArriving = countDown.contains('進站');
               return StationArrival(
                 destination: destination,
