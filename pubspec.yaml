@@ -51,6 +51,14 @@ dependencies:
   
   # HTTP requests
   http: ^1.2.0
+<<<<<<< Updated upstream
+=======
+  speech_to_text: ^7.3.0
+  geolocator: ^10.0.0
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.0
+>>>>>>> Stashed changes
 
 dev_dependencies:
   flutter_test:

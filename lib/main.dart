@@ -8,6 +8,8 @@ import 'pages/my_account_page.dart';
 import 'utils/version_check_wrapper.dart';
 import 'utils/font_size_manager.dart';
 import 'utils/global_login_state.dart';
+import 'utils/loc_store.dart';
+import 'utils/location_tracking.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +28,12 @@ void main() async {
 
   // 初始化字體大小管理器
   await FontSizeManager.initialize();
+
+  // 初始化本機定位儲存
+  await LocStore.init();
+
+  // 啟動前景定位追蹤（可視需求改為在某頁面啟動）
+  LocationTracking.startForegroundTracking();
 
   runApp(const MyApp());
 }
