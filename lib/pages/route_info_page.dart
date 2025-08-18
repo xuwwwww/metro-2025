@@ -195,93 +195,186 @@ class MetroApiService {
   }
 }
 
-class RouteInfoPage extends StatelessWidget {
+
+class RouteInfoPage extends StatefulWidget {
   const RouteInfoPage({super.key});
 
+  @override
+  State<RouteInfoPage> createState() => _RouteInfoPageState();
+}
+
+class _RouteInfoPageState extends State<RouteInfoPage> {
   // === 地圖原始像素大小 ===
   static const double kMapW = 960;
   static const double kMapH = 1280;
+
+  // 選中的站點狀態
+  StationPin? startStation;
+  StationPin? endStation;
 
   // 站點資料（相對座標 0~1）。先放幾筆示範，之後可用「座標擷取模式」補齊
   static final List<StationPin> stationPins = [
     StationPin(id: 'R11', title: '台北101/世貿', fx: 0.74, fy: 0.65),
     // StationPin(id: 'G03', title: '松山機場', fx: 0.85, fy: 0.35),
-    StationPin(id: 'BL12R10', title: '松江南京', fx: 0.51, fy: 0.52),
+    StationPin(id: 'G15R12', title: '松江南京', fx: 0.51, fy: 0.52), // 修正：松江南京站的正確 ID
     StationPin(id: 'BL14O07', title: '忠孝新生', fx: 0.51, fy: 0.58),
     StationPin(id: 'BL13', title: '善導寺', fx: 0.465, fy: 0.58),
-    StationPin(id: 'BL12R10', title: '台北車站', fx: 0.41, fy: 0.58),
+    StationPin(id: 'BL12R10', title: '台北車站', fx: 0.41, fy: 0.58), // 台北車站保持原 ID
     StationPin(id: 'G14R11', title: '中山', fx: 0.41, fy: 0.52),
     StationPin(id: 'BL11G12', title: '西門', fx: 0.345, fy: 0.58),
     StationPin(id: 'G10R08', title: '中正紀念堂', fx: 0.41, fy: 0.65),
     StationPin(id: 'G11', title: '小南門', fx: 0.345, fy: 0.645),
+    StationPin(id: 'BL15BR10', title: '忠孝復興', fx: 0.615, fy: 0.58),
+    StationPin(id: 'G16BR11', title: '南京復興', fx: 0.615, fy: 0.52),
+    StationPin(id: 'R05BR09', title: '大安', fx: 0.615, fy:  0.65),
   ];
 
-  // Modal Bottom Sheet 函數
+  // === 站點選擇處理邏輯 ===
+  // 這個方法負責處理用戶點擊地圖上站點的邏輯
+  // 實現起點→終點的選擇流程，並在選擇完成後自動顯示終點站資訊
+  void _onStationSelected(StationPin selectedPin) {
+    setState(() {
+      if (startStation == null) {
+        // 第一次點擊：設置起點
+        startStation = selectedPin;
+        endStation = null; // 清除終點
+      } else if (startStation!.id == selectedPin.id) {
+        // 點擊同一個站點：取消選擇
+        startStation = null;
+        endStation = null;
+      } else if (endStation == null) {
+        // 第二次點擊不同站點：設置終點，並自動顯示終點站資訊
+        endStation = selectedPin;
+        _showModalBottomSheet(
+          context,
+          startStation: startStation!,
+          endStation: endStation!,
+        );
+      } else {
+        // 重新選擇：重新設置起點
+        startStation = selectedPin;
+        endStation = null;
+      }
+    });
+  }
+
+  // Modal Bottom Sheet 函數 - 修改為接受起點和終點
   void _showModalBottomSheet(
     BuildContext context, {
+    StationPin? startStation,
+    StationPin? endStation,
     String? stationName,
     String? stationId,
   }) async {
-    // 當開啟 Bottom Sheet 時呼叫 API 並顯示結果到 console
-    print('🚇 點擊站點: $stationName (ID: $stationId)');
-    print('📡 開始呼叫台北捷運 API...');
+    // 如果有起終點，顯示終點站的詳細資訊
+    if (startStation != null && endStation != null) {
+      print('🚇 顯示終點站資訊: ${endStation.title} (起點: ${startStation.title})');
+      print('📡 開始呼叫台北捷運 API...');
 
-    List<Map<String, dynamic>> stationTrackData = [];
+      List<Map<String, dynamic>> endStationTrackData = [];
 
-    try {
-      final trackData = await MetroApiService.fetchTrackInfo();
-      print('✅ API 呼叫成功，共獲得 ${trackData.length} 筆資料');
+      try {
+        final trackData = await MetroApiService.fetchTrackInfo();
+        print('✅ API 呼叫成功，共獲得 ${trackData.length} 筆資料');
 
-      // 過濾出與當前站點相關的資料
-      stationTrackData = MetroApiService.filterByStation(
-        trackData,
-        stationName ?? '台北車站',
-      );
-      print('🎯 與 $stationName 相關的資料: ${stationTrackData.length} 筆');
-
-      // 詳細顯示相關資料
-      for (int i = 0; i < stationTrackData.length; i++) {
-        final item = stationTrackData[i];
-        print(
-          '  ${i + 1}. 車次: ${item['TrainNumber'] ?? '無'} | '
-          '終點: ${item['DestinationName']} | '
-          '倒數: ${item['CountDown']} | '
-          '時間: ${item['NowDateTime']}',
+        // 只過濾終點站的資料
+        endStationTrackData = MetroApiService.filterByStation(
+          trackData,
+          endStation.title,
         );
-      }
+        print('🎯 終點站 ${endStation.title} 相關資料: ${endStationTrackData.length} 筆');
 
-      // 如果沒有找到相關資料，顯示所有資料的前5筆作為參考
-      if (stationTrackData.isEmpty && trackData.isNotEmpty) {
-        print('ℹ️  未找到 $stationName 的資料，顯示前5筆作為參考:');
-        final sampleData = trackData.take(5).toList();
-        for (int i = 0; i < sampleData.length; i++) {
-          final item = sampleData[i];
+        // 詳細顯示終點站資料
+        for (int i = 0; i < endStationTrackData.length; i++) {
+          final item = endStationTrackData[i];
           print(
-            '  ${i + 1}. 站名: ${item['StationName']} | '
-            '車次: ${item['TrainNumber'] ?? '無'} | '
+            '  ${i + 1}. 車次: ${item['TrainNumber'] ?? '無'} | '
+            '站名: ${item['StationName']} | '
             '終點: ${item['DestinationName']} | '
-            '倒數: ${item['CountDown']}',
+            '倒數: ${item['CountDown']} | '
+            '時間: ${item['NowDateTime']}',
           );
         }
+      } catch (e) {
+        print('❌ API 呼叫失敗: $e');
       }
-    } catch (e) {
-      print('❌ API 呼叫失敗: $e');
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (BuildContext context) {
+          return _StationInfoSheet(
+            stationName: endStation.title,
+            stationId: endStation.id,
+            startStation: startStation, // 傳遞起點資訊作為參考
+            endStation: endStation,     // 傳遞終點資訊
+            trackData: endStationTrackData, // 顯示終點站的列車資料
+          );
+        },
+      );
+    } else {
+      // 原有的單站查詢邏輯
+      print('🚇 點擊站點: $stationName (ID: $stationId)');
+      print('📡 開始呼叫台北捷運 API...');
+
+      List<Map<String, dynamic>> stationTrackData = [];
+
+      try {
+        final trackData = await MetroApiService.fetchTrackInfo();
+        print('✅ API 呼叫成功，共獲得 ${trackData.length} 筆資料');
+
+        // 過濾出與當前站點相關的資料
+        stationTrackData = MetroApiService.filterByStation(
+          trackData,
+          stationName ?? '台北車站',
+        );
+        print('🎯 與 $stationName 相關的資料: ${stationTrackData.length} 筆');
+
+        // 詳細顯示相關資料
+        for (int i = 0; i < stationTrackData.length; i++) {
+          final item = stationTrackData[i];
+          print(
+            '  ${i + 1}. 車次: ${item['TrainNumber'] ?? '無'} | '
+            '終點: ${item['DestinationName']} | '
+            '倒數: ${item['CountDown']} | '
+            '時間: ${item['NowDateTime']}',
+          );
+        }
+
+        // 如果沒有找到相關資料，顯示所有資料的前5筆作為參考
+        if (stationTrackData.isEmpty && trackData.isNotEmpty) {
+          print('ℹ️  未找到 $stationName 的資料，顯示前5筆作為參考:');
+          final sampleData = trackData.take(5).toList();
+          for (int i = 0; i < sampleData.length; i++) {
+            final item = sampleData[i];
+            print(
+              '  ${i + 1}. 站名: ${item['StationName']} | '
+              '車次: ${item['TrainNumber'] ?? '無'} | '
+              '終點: ${item['DestinationName']} | '
+              '倒數: ${item['CountDown']}',
+            );
+          }
+        }
+      } catch (e) {
+        print('❌ API 呼叫失敗: $e');
+      }
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (BuildContext context) {
+          return _StationInfoSheet(
+            stationName: stationName ?? '台北車站',
+            stationId: stationId ?? 'BL12R10',
+            trackData: stationTrackData,
+          );
+        },
+      );
     }
 
     print('─' * 50);
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (BuildContext context) {
-        return _StationInfoSheet(
-          stationName: stationName ?? '台北車站',
-          stationId: stationId ?? 'BL12R10',
-          trackData: stationTrackData, // 傳遞列車資料
-        );
-      },
-    );
   }
 
   @override
@@ -306,20 +399,96 @@ class RouteInfoPage extends StatelessWidget {
             ),
           ),
 
-          // 頁面標題
+          // === 動態狀態指示區塊 ===
+          // 這個區塊顯示當前的選擇狀態和使用指引
+          // 會根據用戶的選擇動態更新顯示內容
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 12),
             color: const Color(0xFF2A3A4A),
-            child: const Center(
-              child: Text(
-                '查詢乘車資訊',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+            child: Column(
+              children: [
+                const Text(
+                  '查詢乘車資訊',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
+                // === 選擇狀態顯示 ===
+                if (startStation != null || endStation != null) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // 起點標籤（綠色）
+                      if (startStation != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '起點: ${startStation!.title}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      // 終點標籤（紅色）或提示文字
+                      if (endStation != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '終點: ${endStation!.title}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ] else if (startStation != null) ...[
+                        // 只有起點時的提示
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[600],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Text(
+                            '請選擇終點',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ] else ...[
+                  // 初始狀態的使用指引
+                  const SizedBox(height: 8),
+                  const Text(
+                    '請點選兩個站點進行路線規劃',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
 
@@ -375,29 +544,60 @@ class RouteInfoPage extends StatelessWidget {
                           },
                         ),
 
-                        // 站點 pins
+                        // === 地圖站點顯示區塊 ===
+                        // 這個區塊負責在地圖上渲染所有可點擊的捷運站點
+                        // 每個站點會根據選擇狀態顯示不同的顏色和標籤
                         for (final pin in stationPins)
                           _PinWidget(
                             pin: pin,
-                            onTap: () => _showModalBottomSheet(
-                              context,
-                              stationName: pin.title,
-                              stationId: pin.id,
-                            ),
+                            isSelected: startStation?.id == pin.id || endStation?.id == pin.id,
+                            isStartStation: startStation?.id == pin.id,     // 綠色標籤
+                            isEndStation: endStation?.id == pin.id,         // 紅色標籤
+                            onTap: () => _onStationSelected(pin),            // 點擊處理
                           ),
                       ],
                     ),
                   ),
                 ),
 
-                // 浮動按鈕 - 觸發 Bottom Sheet
+                // === 浮動按鈕組區塊 ===
+                // 這個區塊負責顯示地圖右下角的浮動按鈕
+                // 包含重置選擇按鈕，用於清除已選擇的起點和終點
                 Positioned(
                   bottom: 20,
                   right: 20,
-                  child: FloatingActionButton(
-                    onPressed: () => _showModalBottomSheet(context),
-                    backgroundColor: const Color(0xFF26C6DA),
-                    child: const Icon(Icons.info, color: Colors.white),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // === 重置選擇按鈕 ===
+                      // 當用戶已選擇起點或終點時顯示，點擊可清除所有選擇
+                      if (startStation != null || endStation != null)
+                        FloatingActionButton(
+                          heroTag: "reset", // 避免多個 FloatingActionButton 衝突
+                          onPressed: () {
+                            setState(() {
+                              startStation = null; // 清除起點
+                              endStation = null;   // 清除終點
+                            });
+                          },
+                          backgroundColor: Colors.grey[700],
+                          child: const Icon(Icons.clear, color: Colors.white),
+                        ),
+                      
+                      // === 藍色 Info 按鈕（已隱藏）===
+                      // 原本用於手動觸發 Bottom Sheet 的按鈕
+                      // 現在改為自動觸發（選擇兩個站點後自動顯示），因此隱藏此按鈕
+                      /* 
+                      if (startStation != null || endStation != null)
+                        const SizedBox(height: 12),
+                      FloatingActionButton(
+                        heroTag: "info",
+                        onPressed: () => _showModalBottomSheet(context),
+                        backgroundColor: const Color(0xFF26C6DA),
+                        child: const Icon(Icons.info, color: Colors.white),
+                      ),
+                      */
+                    ],
                   ),
                 ),
               ],
@@ -590,9 +790,18 @@ class StationBusDummy {
 
 // === 單一 pin 的呈現（可切換為隱形 hit area）===
 class _PinWidget extends StatelessWidget {
-  const _PinWidget({required this.pin, required this.onTap});
+  const _PinWidget({
+    required this.pin, 
+    required this.onTap,
+    this.isSelected = false,
+    this.isStartStation = false,
+    this.isEndStation = false,
+  });
   final StationPin pin;
   final VoidCallback onTap;
+  final bool isSelected;
+  final bool isStartStation;
+  final bool isEndStation;
 
   static const double _hit = 28; // 觸控熱區大小
   static const double _dot = 10; // 中心圓點（debug用，可隱藏）
@@ -600,45 +809,91 @@ class _PinWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 由相對座標轉像素位置
-    const mapW = RouteInfoPage.kMapW;
-    const mapH = RouteInfoPage.kMapH;
+    const mapW = _RouteInfoPageState.kMapW;
+    const mapH = _RouteInfoPageState.kMapH;
     final left = pin.fx * mapW - _hit / 2;
     final top = pin.fy * mapH - _hit / 2;
+
+    Color pinColor = Colors.cyanAccent.withOpacity(0.9);
+    if (isStartStation) {
+      pinColor = Colors.green;
+    } else if (isEndStation) {
+      pinColor = Colors.red;
+    } else if (isSelected) {
+      pinColor = Colors.orange;
+    }
 
     return Positioned(
       left: left,
       top: top,
       width: _hit,
       height: _hit,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(_hit / 2),
-        child: Center(
-          // 想要「隱形按鈕」就把這顆小方形拿掉
-          child: Container(
-            width: _dot,
-            height: _dot,
-            decoration: BoxDecoration(
-              color: Colors.cyanAccent.withOpacity(0.9),
-              shape: BoxShape.rectangle, // 改為方形
-              borderRadius: BorderRadius.circular(2), // 添加一點圓角
-              boxShadow: const [BoxShadow(blurRadius: 4, spreadRadius: 1)],
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // 觸控區域
+          InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(_hit / 2),
+            child: Center(
+              child: Container(
+                width: _dot,
+                height: _dot,
+                decoration: BoxDecoration(
+                  color: pinColor,
+                  shape: BoxShape.rectangle,
+                  borderRadius: BorderRadius.circular(2),
+                  boxShadow: const [BoxShadow(blurRadius: 4, spreadRadius: 1)],
+                ),
+              ),
             ),
           ),
-        ),
+          // 起終點標籤
+          if (isStartStation || isEndStation)
+            Positioned(
+              top: -25,
+              left: -10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isStartStation ? Colors.green : Colors.red,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 2,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
+                ),
+                child: Text(
+                  isStartStation ? '起點' : '終點',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 }
 
 class _StationInfoSheet extends StatefulWidget {
-  final String stationName;
-  final String stationId;
-  final List<Map<String, dynamic>> trackData; // 新增列車資料參數
+  final String? stationName;
+  final String? stationId;
+  final StationPin? startStation;
+  final StationPin? endStation;
+  final List<Map<String, dynamic>> trackData; // 列車資料參數
 
   const _StationInfoSheet({
-    this.stationName = '台北車站',
-    this.stationId = 'BL12R10',
+    this.stationName,
+    this.stationId,
+    this.startStation,
+    this.endStation,
     this.trackData = const [], // 預設為空陣列
   });
 
@@ -658,8 +913,9 @@ class _StationInfoSheetState extends State<_StationInfoSheet>
   List<Map<String, dynamic>> youBikeStations = [];
   bool isLoadingYouBike = false;
 
-  // 公車排序狀態
-  int busSortIndex = 1; // 0=依出口排序、1=依公車排序（預設如截圖為「依公車排序」）
+  // 公車查詢狀態
+  final TextEditingController _busSearchController = TextEditingController();
+  String busSearchQuery = '';
 
   @override
   void initState() {
@@ -676,6 +932,7 @@ class _StationInfoSheetState extends State<_StationInfoSheet>
   @override
   void dispose() {
     _animationController.dispose();
+    _busSearchController.dispose();
     super.dispose();
   }
 
@@ -696,11 +953,17 @@ class _StationInfoSheetState extends State<_StationInfoSheet>
 
     setState(() => isLoadingYouBike = true);
 
-    print('🚲 呼叫 YouBike API（依站名）: ${widget.stationName}');
+    // 優先使用終點站，如果沒有終點站則使用起點站或一般站名
+    final currentStationName = widget.endStation?.title ?? 
+                              widget.startStation?.title ?? 
+                              widget.stationName ?? 
+                              '台北車站';
+
+    print('🚲 呼叫 YouBike API（依站名）: $currentStationName');
     try {
       // 也可改為 fetchYouBikeAll() 看全部
       final bikes = await MetroApiService.fetchYouBikeByStation(
-        widget.stationName,
+        currentStationName,
       );
       print('✅ YouBike 筆數: ${bikes.length}');
       for (int i = 0; i < bikes.length; i++) {
@@ -753,19 +1016,130 @@ class _StationInfoSheetState extends State<_StationInfoSheet>
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          // 第一行：車站名稱
+          // === Bottom Sheet 標題顯示區塊 ===
+          // 顯示選擇的路線資訊，簡化為「起點 → 終點」格式
           Container(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  widget.stationName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Expanded(
+                  child: widget.startStation != null && widget.endStation != null
+                      ? 
+                      // === 路線標示：起點 → 終點 ===
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // 起點標籤（綠色）
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              widget.startStation!.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          // 箭頭
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 12),
+                            child: Icon(
+                              Icons.arrow_forward,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                          // 終點標籤（紅色）
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              widget.endStation!.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                      /* === 註解：原本複雜的車站名稱或路線資訊顯示 ===
+                      ? Column(
+                          children: [
+                            Text(
+                              widget.endStation!.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    widget.startStation!.title,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 4),
+                                  child: Icon(
+                                    Icons.arrow_forward,
+                                    color: Colors.grey,
+                                    size: 14,
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    widget.endStation!.title,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        )
+                      */
+                      // === 單站顯示（當沒有選擇路線時）===
+                      : Text(
+                          widget.stationName ?? '台北車站',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
                 const SizedBox(width: 12),
                 AnimatedBuilder(
@@ -860,15 +1234,20 @@ class _StationInfoSheetState extends State<_StationInfoSheet>
     return ListView(
       padding: const EdgeInsets.only(bottom: 12),
       children: [
-        _buildYouBikeBlock(), // 既有的 YouBike 視覺（改為非 Expanded 版）
-        const SizedBox(height: 16),
         _buildBusSection(), // 新增：公車轉乘（假資料）
+        const SizedBox(height: 16),
+        _buildYouBikeBlock(), // 既有的 YouBike 視覺（改為非 Expanded 版）
       ],
     );
   }
 
   // 新增：建構 YouBike 區塊（固定高度版本）
   Widget _buildYouBikeBlock() {
+    final currentStationName = widget.endStation?.title ?? 
+                              widget.startStation?.title ?? 
+                              widget.stationName ?? 
+                              '台北車站';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -877,7 +1256,7 @@ class _StationInfoSheetState extends State<_StationInfoSheet>
             const Icon(Icons.directions_bike, color: Colors.white, size: 20),
             const SizedBox(width: 8),
             Text(
-              '${widget.stationName} 周邊 YouBike',
+              '$currentStationName 周邊 YouBike',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
@@ -936,7 +1315,7 @@ class _StationInfoSheetState extends State<_StationInfoSheet>
                 borderRadius: BorderRadius.circular(12),
                 child: _YouBikeMapWidget(
                   stations: youBikeStations,
-                  currentStationName: widget.stationName,
+                  currentStationName: currentStationName,
                 ),
               ),
             ),
@@ -947,144 +1326,290 @@ class _StationInfoSheetState extends State<_StationInfoSheet>
 
   // 新增：公車轉乘區塊
   Widget _buildBusSection() {
+    final currentStationId = widget.endStation?.id ?? 
+                            widget.startStation?.id ?? 
+                            widget.stationId ?? 
+                            'BL12R10';
+    final currentStationName = widget.endStation?.title ?? 
+                              widget.startStation?.title ?? 
+                              widget.stationName ?? 
+                              '台北車站';
+
     final items = List<BusTransferItem>.from(
       StationBusDummy.of(
-        widget.stationId.isNotEmpty ? widget.stationId : widget.stationName,
+        currentStationId.isNotEmpty ? currentStationId : currentStationName,
       ),
     );
 
-    // 排序
-    if (busSortIndex == 0) {
-      items.sort((a, b) => a.exit.compareTo(b.exit)); // 出口排序
-    } else {
-      // 公車排序：先 route，再 stop
-      items.sort(
-        (a, b) => a.route == b.route
-            ? a.stop.compareTo(b.stop)
-            : a.route.compareTo(b.route),
-      );
-    }
+    // 預設依公車號碼排序
+    items.sort(
+      (a, b) => a.route == b.route
+          ? a.stop.compareTo(b.stop)
+          : a.route.compareTo(b.route),
+    );
+
+    // 根據搜尋條件過濾公車路線
+    final filteredItems = busSearchQuery.isEmpty
+        ? items
+        : items.where((item) => 
+            item.route.toLowerCase().contains(busSearchQuery.toLowerCase()) ||
+            item.stop.toLowerCase().contains(busSearchQuery.toLowerCase())
+          ).toList();
 
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF2A3A4A),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 標題
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+          // 公車標題區塊
+          Container(
+            width: double.infinity,
+            height: 38,
+            decoration: const BoxDecoration(
+              color: Color(0xFF2A3A4A),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(10),
+                topRight: Radius.circular(10),
+              ),
+            ),
+            child: const Center(
+              child: Text(
+                '公車',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontFamily: 'Noto Sans TC',
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          // 搜尋輸入區域
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             child: Row(
-              children: const [
-                Icon(Icons.directions_bus, color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Text(
-                  '公車轉乘',
+              children: [
+                // 搜尋輸入框
+                Expanded(
+                  child: Container(
+                    height: 35,
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        width: 1,
+                        color: const Color(0xFF646466),
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.white,
+                    ),
+                    child: TextField(
+                      controller: _busSearchController,
+                      onChanged: (value) {
+                        setState(() {
+                          busSearchQuery = value;
+                        });
+                      },
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 12,
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w400,
+                      ),
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        hintText: '輸入公車號碼',
+                        hintStyle: const TextStyle(
+                          color: Color(0xFF959595),
+                          fontSize: 12,
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w400,
+                        ),
+                        prefixIcon: Container(
+                          width: 20,
+                          height: 20,
+                          margin: const EdgeInsets.only(left: 8, right: 4),
+                          child: Center(
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.fromBorderSide(
+                                  BorderSide(
+                                    width: 2,
+                                    color: Color(0xFF959595),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        prefixIconConstraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 20,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  '依公車號碼排序',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    fontFamily: 'Inter',
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
               ],
             ),
           ),
-          // 分段切換（依出口／依公車）
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          // 搜尋結果提示
+          if (busSearchQuery.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              child: Text(
+                filteredItems.isEmpty 
+                  ? '未找到符合「$busSearchQuery」的公車路線'
+                  : '找到 ${filteredItems.length} 條符合「$busSearchQuery」的公車路線',
+                style: TextStyle(
+                  color: filteredItems.isEmpty ? Colors.orange : Colors.green,
+                  fontSize: 12,
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
+          // 公車資訊列表標題行
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             child: Row(
-              children: [
-                _segBtn(
-                  '依出口排序',
-                  selected: busSortIndex == 0,
-                  onTap: () => setState(() => busSortIndex = 0),
+              children: const [
+                SizedBox(
+                  width: 84.64,
+                  child: Text(
+                    '公車號碼',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _segBtn(
-                  '依公車排序',
-                  selected: busSortIndex == 1,
-                  onTap: () => setState(() => busSortIndex = 1),
+                SizedBox(width: 8),
+                Text(
+                  '往',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontFamily: 'Inter',
+                    fontWeight: FontWeight.w400,
+                  ),
                 ),
+                Spacer(),
+                Text(
+                  '出口',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontFamily: 'Inter',
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+                SizedBox(width: 20),
               ],
             ),
           ),
-          const Divider(height: 1, color: Colors.white24),
-          // 列表
-          ListView.separated(
+          // 公車路線資訊列表
+          ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: items.length,
-            separatorBuilder: (_, __) =>
-                const Divider(height: 1, color: Colors.white12),
+            itemCount: filteredItems.length,
             itemBuilder: (context, i) {
-              final it = items[i];
-              return Padding(
+              final it = filteredItems[i];
+              return Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
+                  horizontal: 10,
+                  vertical: 8,
                 ),
                 child: Row(
                   children: [
+                    // 公車號碼
                     SizedBox(
-                      width: 56,
+                      width: 84.64,
                       child: Text(
                         it.route,
+                        textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w400,
                         ),
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    // 往字
+                    const Text(
+                      '往',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // 目的地
                     Expanded(
                       child: Text(
                         it.stop,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 16,
+                          fontSize: 14,
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w400,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    _ExitBadge(it.exit),
-                    const SizedBox(width: 6),
-                    const Icon(Icons.chevron_right, color: Colors.white70),
+                    // 出口標籤
+                    _ExitBadge(
+                      it.exit,
+                      style: ExitBadgeStyle.flag,
+                      height: 22,
+                    ),
+                    const SizedBox(width: 8),
+                    // 箭頭
+                    const Text(
+                      '>',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
                   ],
                 ),
               );
             },
           ),
+          const SizedBox(height: 10),
         ],
-      ),
-    );
-  }
-
-  // 分段按鈕樣式（左灰右藍，對應你的截圖）
-  Widget _segBtn(
-    String text, {
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFF2E77B8) : Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: selected ? Colors.transparent : Colors.white30,
-          ),
-        ),
-        child: Text(
-          text,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
       ),
     );
   }
@@ -1092,13 +1617,30 @@ class _StationInfoSheetState extends State<_StationInfoSheet>
   // 新增：建構列車資訊的 Widget
   Widget _buildTrainInfo() {
     if (widget.trackData.isEmpty) {
-      return const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('乘車資訊', style: TextStyle(color: Colors.white, fontSize: 16)),
-          SizedBox(height: 8),
-          Text('目前沒有列車進站資訊', style: TextStyle(color: Colors.grey)),
-        ],
+      return SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 列車進站標題區塊
+            _buildTrainInfoHeader(updateTime: '沒有資料'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(24),
+              child: const Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.train, size: 48, color: Colors.grey),
+                    SizedBox(height: 12),
+                    Text(
+                      '目前沒有列車進站資訊',
+                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       );
     }
 
@@ -1114,44 +1656,208 @@ class _StationInfoSheetState extends State<_StationInfoSheet>
       return secondsA.compareTo(secondsB); // 升序排列，最小的（最接近）在前
     });
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '即時列車進站資訊',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: ListView.builder(
+    // 取得最新更新時間（假設所有列車的更新時間相同，取第一筆）
+    final latestUpdateTime = sortedTrackData.isNotEmpty 
+        ? _extractSecondsFromUpdateTime(sortedTrackData.first['NowDateTime']?.toString() ?? '')
+        : '0';
+
+    // 檢查是否為台北車站終點的列車
+    final currentStationName = widget.endStation?.title ?? 
+                              widget.startStation?.title ?? 
+                              widget.stationName ?? 
+                              '';
+    final showTaipeiStationLayout = currentStationName.contains('台北車站');
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 列車進站標題區塊
+          _buildTrainInfoHeader(updateTime: latestUpdateTime),
+          const SizedBox(height: 5),
+          // 列車資訊清單
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
             itemCount: sortedTrackData.length,
+            separatorBuilder: (context, index) => Container(
+              width: double.infinity,
+              height: 0.5,
+              color: const Color(0xFFE0E0E0), // 淺灰色分隔線，在白色背景下更明顯
+              margin: const EdgeInsets.symmetric(horizontal: 15),
+            ),
             itemBuilder: (context, index) {
               final train = sortedTrackData[index];
-              return _buildTrainCard(train);
+              return _buildTrainCard(train, isFirst: index == 0);
             },
           ),
-        ),
-      ],
+          const SizedBox(height: 16),
+
+          // === 台北車站月台配置圖片（僅在台北車站顯示）===
+          if (showTaipeiStationLayout) ...[
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white, // 白底背景
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.withOpacity(0.3)),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.asset(
+                  'lib/assets/metro-station-001.png', // 圖片路徑
+                  width: double.infinity,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      height: 200,
+                      color: Colors.white,
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.image_not_supported,
+                            size: 48,
+                            color: Colors.grey,
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            '台北車站月台配置圖載入失敗',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            '請確認 metro-platform-layout.png 已放入 assets 資料夾',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // === 首末班車時刻表（僅在台北車站顯示）===
+          if (showTaipeiStationLayout) ...[
+            // 直接顯示首末班車時刻表，不包邊框
+            const TaipeiMainStationSchedule(),
+          ],
+          
+          
+          
+          const SizedBox(height: 16),
+        ],
+      ),
     );
   }
 
   // 新增：建構車站資訊的 Widget
   Widget _buildStationInfo() {
+    final currentStationId = widget.endStation?.id ?? 
+                            widget.startStation?.id ?? 
+                            widget.stationId ?? 
+                            'BL12R10';
+    final currentStationName = widget.endStation?.title ?? 
+                              widget.startStation?.title ?? 
+                              widget.stationName ?? 
+                              '台北車站';
+
     final exits = StationStaticData.exitsBy(
-      widget.stationId.isNotEmpty ? widget.stationId : widget.stationName,
+      currentStationId.isNotEmpty ? currentStationId : currentStationName,
     );
     final facilities = StationFacilities.of(
-      widget.stationId.isNotEmpty ? widget.stationId : widget.stationName,
+      currentStationId.isNotEmpty ? currentStationId : currentStationName,
     );
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 車站位置圖（只在台北車站顯示）
+          if (currentStationName.contains('台北車站')) ...[
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A3A4A),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.map, color: Colors.white, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          '台北車站位置圖',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
+                    ),
+                    child: Image.asset(
+                      'lib/assets/metro-map-001.jpg',
+                      width: double.infinity,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          height: 200,
+                          color: const Color(0xFF1A2327),
+                          child: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.image_not_supported,
+                                size: 48,
+                                color: Colors.grey,
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                '台北車站位置圖載入失敗',
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              Text(
+                                '請確認 metro-map-001.jpg 已放入 assets 資料夾',
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           // 出口資訊區段
           const Text(
             '出口資訊',
@@ -1354,77 +2060,82 @@ class _StationInfoSheetState extends State<_StationInfoSheet>
     return 999999; // 無法解析的時間放在最後
   }
 
-  // 新增：建構單筆列車資訊卡片
-  Widget _buildTrainCard(Map<String, dynamic> train) {
-    final countDown = train['CountDown']?.toString() ?? '';
-    final destination = train['DestinationName']?.toString() ?? '';
-    final trainNumber = train['TrainNumber']?.toString() ?? '';
-    final updateTime = train['NowDateTime']?.toString() ?? '';
-
-    // 判斷倒數時間的顏色
-    Color countDownColor = Colors.white;
-    IconData statusIcon = Icons.train;
-
-    if (countDown.contains('進站')) {
-      countDownColor = Colors.red;
-      statusIcon = Icons.warning;
-    } else if (countDown.contains(':')) {
-      // 解析時間，如果小於1分鐘顯示橙色
-      final parts = countDown.split(':');
-      if (parts.length == 2) {
-        final minutes = int.tryParse(parts[0]) ?? 0;
-        if (minutes == 0) {
-          countDownColor = Colors.orange;
-          statusIcon = Icons.schedule;
-        } else {
-          countDownColor = Colors.green;
-          statusIcon = Icons.train;
-        }
-      }
+  // 新增：從更新時間中提取秒數（用於顯示"X秒前更新"）
+  String _extractSecondsFromUpdateTime(String updateTime) {
+    if (updateTime.isEmpty) return '0';
+    
+    try {
+      // 假設更新時間格式為 "2024-01-01 12:34:56"，計算與當前時間的差異
+      final now = DateTime.now();
+      
+      // 簡單的邏輯：返回一個隨機的秒數（實際應用中應該計算真實的時間差）
+      // 這裡使用模擬數據
+      final random = updateTime.hashCode % 60;
+      return random.abs().toString();
+    } catch (e) {
+      return '0';
     }
+  }
 
+  // 新增：建構列車進站標題區塊
+  Widget _buildTrainInfoHeader({required String updateTime}) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2A3A4A),
-        borderRadius: BorderRadius.circular(8),
-        border: Border(left: BorderSide(color: countDownColor, width: 4)),
+      width: double.infinity,
+      height: 38,
+      decoration: const BoxDecoration(
+        color: Color(0xFFE1F3F8),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(10),
+          topRight: Radius.circular(10),
+        ),
       ),
-      child: Row(
+      child: Stack(
         children: [
-          Icon(statusIcon, color: countDownColor, size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // 標題文字 "列車進站"
+          const Positioned(
+            left: 0,
+            right: 0,
+            top: 8.67,
+            child: Text(
+              '列車進站',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.black,
+                fontSize: 16,
+                fontFamily: 'Noto Sans TC',
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          // 更新時間顯示
+          Positioned(
+            right: 10,
+            top: 4,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  '$countDown 往 $destination',
-                  style: TextStyle(
-                    color: countDownColor,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Text(
+                    updateTime,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF646466),
+                      fontSize: 10,
+                      fontFamily: 'Noto Sans TC',
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    if (trainNumber.isNotEmpty) ...[
-                      Text(
-                        '車次: $trainNumber',
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                    Text(
-                      '更新: ${updateTime.split(' ').length > 1 ? updateTime.split(' ')[1] : updateTime}',
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                  ],
+                const Text(
+                  '秒前更新',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Color(0xFF646466),
+                    fontSize: 10,
+                    fontFamily: 'Noto Sans TC',
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
@@ -1434,79 +2145,774 @@ class _StationInfoSheetState extends State<_StationInfoSheet>
     );
   }
 
-  // 新增：建構YouBike地圖的 Widget
-  Widget _buildYouBikeMap() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+  // 新增：建構單筆列車資訊卡片（新版面）
+  Widget _buildTrainCard(Map<String, dynamic> train, {bool isFirst = false}) {
+    final countDown = train['CountDown']?.toString() ?? '';
+    final destination = train['DestinationName']?.toString() ?? '';
+    final trainNumber = train['TrainNumber']?.toString() ?? '';
+
+    // 判斷路線顏色和線路資訊
+    Color lineColor = const Color(0xFF008659); // 預設綠線顏色
+    String lineCode = '00';
+    String lineText = 'R';
+    
+    // 根據目的地判斷路線（這裡可以擴展更多邏輯）
+    if (destination.contains('淡水') || destination.contains('象山')) {
+      lineColor = const Color(0xFFE3002C); // 紅線
+      lineCode = '02';
+      lineText = 'R';
+    } else if (destination.contains('蘆洲') || destination.contains('南勢角')) {
+      lineColor = const Color(0xFFF79500); // 橘線
+      lineCode = '03';
+      lineText = 'O';
+    } else if (destination.contains('大坪林') || destination.contains('板橋')) {
+      lineColor = const Color(0xFF0070BD); // 藍線
+      lineCode = '01';
+      lineText = 'B';
+    }
+
+    return Container(
+      width: double.infinity,
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: 15),
+      decoration: BoxDecoration(
+        color: Colors.white, // 白色背景
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Icon(Icons.directions_bike, color: Colors.white, size: 20),
-            const SizedBox(width: 8),
-            Text(
-              '${widget.stationName} 周邊 YouBike',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            if (isLoadingYouBike) ...[
-              const SizedBox(width: 12),
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.cyan),
-                ),
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (isLoadingYouBike)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(32.0),
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.cyan),
-              ),
-            ),
-          )
-        else if (youBikeStations.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(24),
-            child: const Center(
-              child: Column(
+            // 左側：車次和目的地資訊
+            SizedBox(
+              width: 140,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Icon(Icons.location_off, size: 48, color: Colors.grey),
-                  SizedBox(height: 12),
-                  Text(
-                    '未找到 YouBike 站點資料',
-                    style: TextStyle(color: Colors.grey, fontSize: 14),
+                  // 路線標籤
+                  Container(
+                    width: 23.84,
+                    height: 28.26,
+                    decoration: BoxDecoration(
+                      color: lineColor,
+                      border: Border.all(
+                        width: 1,
+                        color: lineColor,
+                      ),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          lineText,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontFamily: 'Noto Sans TC',
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          lineCode,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontFamily: 'Noto Sans TC',
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  // 車次號碼（如果有的話）
+                  if (trainNumber.isNotEmpty) ...[
+                    Text(
+                      trainNumber.length > 4 ? trainNumber.substring(0, 4) : trainNumber,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 10,
+                        fontFamily: 'Noto Sans TC',
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  // // 目的地站名
+                  // Expanded(
+                  //   child: Text(
+                  //     destination,
+                  //     textAlign: TextAlign.left,
+                  //     style: const TextStyle(
+                  //       color: Colors.black,
+                  //       fontSize: 14,
+                  //       fontFamily: 'Noto Sans TC',
+                  //       fontWeight: FontWeight.w700,
+                  //     ),
+                  //     overflow: TextOverflow.ellipsis,
+                  //   ),
+                  // ),
+                ],
+              ),
+            ),
+            // 中間：往字和目的地
+            SizedBox(
+              width: 80,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    '往',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 14,
+                      fontFamily: 'Noto Sans TC',
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      destination,
+                      textAlign: TextAlign.left,
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 14,
+                        fontFamily: 'Noto Sans TC',
+                        fontWeight: FontWeight.w700,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
             ),
-          )
-        else
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF2A3A4A),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.withOpacity(0.3)),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: _YouBikeMapWidget(
-                  stations: youBikeStations,
-                  currentStationName: widget.stationName,
-                ),
+            // 右側：倒數時間
+            SizedBox(
+              width: 80,
+              child: _buildCountDownDisplay(countDown),
+            ),
+          ],
+        ),
+      );
+  }
+
+  // 新增：建構倒數時間顯示
+  Widget _buildCountDownDisplay(String countDown) {
+    if (countDown.contains('進站')) {
+      return const Text(
+        '進站中',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: Color(0xFFD32F2F), // 更深的紅色，在白色背景下更清楚
+          fontSize: 16,
+          fontFamily: 'Noto Sans TC',
+          fontWeight: FontWeight.w900,
+        ),
+      );
+    } else if (countDown.contains(':')) {
+      // 解析 MM:SS 格式
+      final parts = countDown.split(':');
+      if (parts.length == 2) {
+        final minutes = parts[0].padLeft(2, '0');
+        final seconds = parts[1].padLeft(2, '0');
+        
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // 分鐘
+            Text(
+              minutes,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 24,
+                fontFamily: 'Noto Sans TC',
+                fontWeight: FontWeight.w900,
               ),
             ),
+            // 冒號
+            const Text(
+              ':',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.black,
+                fontSize: 20,
+                fontFamily: 'Noto Sans TC',
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            // 秒數
+            Text(
+              seconds,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 24,
+                fontFamily: 'Noto Sans TC',
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        );
+      }
+    }
+    
+    // 其他情況直接顯示原始文字
+    return Text(
+      countDown,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        color: Colors.black,
+        fontSize: 14,
+        fontFamily: 'Noto Sans TC',
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+
+}
+
+// === 台北車站月台視覺化佈局 ===
+class TaipeiMainStationLayout extends StatelessWidget {
+  const TaipeiMainStationLayout({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 355,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // === 標題列：三個欄位並排 ===
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  Container(
+                    width: 76,
+                    height: 38,
+                    decoration: ShapeDecoration(
+                      color: const Color(0xFFE1F3F8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '鄰近出口',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 12,
+                          fontFamily: 'Noto Sans TC',
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: 76,
+                    height: 38,
+                    decoration: ShapeDecoration(
+                      color: const Color(0xFFE1F3F8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '電/手扶梯',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 12,
+                          fontFamily: 'Noto Sans TC',
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Container(
+                    width: 76,
+                    height: 38,
+                    decoration: ShapeDecoration(
+                      color: const Color(0xFFE1F3F8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '轉乘方向',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.black,
+                          fontSize: 12,
+                          fontFamily: 'Noto Sans TC',
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              
+              // === 內容區域：三欄對應內容 ===
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  
+                  
+                  // === 第一欄：出口編號 ===
+                  Container(
+                    width: 82,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      spacing: 15,
+                      children: [
+                        Container(width: double.infinity, height: 80),
+                        Container(
+                          width: double.infinity,
+                          height: 80,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            spacing: 1,
+                            children: [
+                              SizedBox(
+                                width: 30,
+                                height: 25.33,
+                                child: Text(
+                                  'M3',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: const Color(0xFF005EBD),
+                                    fontSize: 20,
+                                    fontFamily: 'Noto Sans TC',
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                width: 30,
+                                height: 25.33,
+                                child: Text(
+                                  'M4',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: const Color(0xFF005EBD),
+                                    fontSize: 20,
+                                    fontFamily: 'Noto Sans TC',
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          width: double.infinity,
+                          height: 80,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            spacing: 1,
+                            children: [
+                              SizedBox(
+                                width: 30,
+                                height: 25.33,
+                                child: Text(
+                                  'M3',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: const Color(0xFF005EBD),
+                                    fontSize: 20,
+                                    fontFamily: 'Noto Sans TC',
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                width: 30,
+                                height: 25.33,
+                                child: Text(
+                                  'M4',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: const Color(0xFF005EBD),
+                                    fontSize: 20,
+                                    fontFamily: 'Noto Sans TC',
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(width: double.infinity, height: 80),
+                        Container(
+                          width: double.infinity,
+                          height: 80,
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            runAlignment: WrapAlignment.center,
+                            spacing: 1,
+                            runSpacing: 1,
+                            children: [
+                              SizedBox(
+                                width: 30,
+                                height: 25.33,
+                                child: Text(
+                                  'M1',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: const Color(0xFF005EBD),
+                                    fontSize: 20,
+                                    fontFamily: 'Noto Sans TC',
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                width: 30,
+                                height: 25.33,
+                                child: Text(
+                                  'M2',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: const Color(0xFF005EBD),
+                                    fontSize: 20,
+                                    fontFamily: 'Noto Sans TC',
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          width: double.infinity,
+                          height: 80,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            spacing: 1,
+                            children: [
+                              SizedBox(
+                                width: 30,
+                                height: 25.33,
+                                child: Text(
+                                  'M1',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: const Color(0xFF005EBD),
+                                    fontSize: 20,
+                                    fontFamily: 'Noto Sans TC',
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                width: 30,
+                                height: 25.33,
+                                child: Text(
+                                  'M2',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: const Color(0xFF005EBD),
+                                    fontSize: 20,
+                                    fontFamily: 'Noto Sans TC',
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              
+                  // === 第二欄：設施圖示 ===
+                  Container(
+                    width: 85,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      spacing: 15,
+                      children: [
+                        Container(width: double.infinity, height: 80),
+                        Container(
+                          width: double.infinity,
+                          height: 80,
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            runAlignment: WrapAlignment.center,
+                            spacing: 2,
+                            runSpacing: 2,
+                            children: [
+                              Container(
+                                width: 39,
+                                height: 32,
+                                decoration: ShapeDecoration(
+                                  shape: RoundedRectangleBorder(
+                                    side: BorderSide(width: 1),
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                ),
+                                child: Stack(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          width: double.infinity,
+                          height: 80,
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            runAlignment: WrapAlignment.center,
+                            spacing: 2,
+                            runSpacing: 2,
+                            children: [
+                              Container(
+                                width: 39,
+                                height: 32,
+                                decoration: ShapeDecoration(
+                                  shape: RoundedRectangleBorder(
+                                    side: BorderSide(width: 1),
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                ),
+                                child: Stack(),
+                              ),
+                              Container(
+                                width: 39,
+                                height: 32,
+                                decoration: ShapeDecoration(
+                                  shape: RoundedRectangleBorder(
+                                    side: BorderSide(width: 1),
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                ),
+                                child: Stack(
+                                  children: [
+                                    Positioned(
+                                      left: 10.21,
+                                      top: 4,
+                                      child: Container(
+                                        width: 4.34,
+                                        height: 4.34,
+                                        decoration: ShapeDecoration(
+                                          color: Colors.black,
+                                          shape: OvalBorder(),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          width: double.infinity,
+                          height: 80,
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            runAlignment: WrapAlignment.center,
+                            spacing: 2,
+                            runSpacing: 2,
+                            children: [
+                              Container(
+                                width: 39,
+                                height: 32,
+                                decoration: ShapeDecoration(
+                                  shape: RoundedRectangleBorder(
+                                    side: BorderSide(width: 1),
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                ),
+                                child: Stack(),
+                              ),
+                              Container(
+                                width: 39,
+                                height: 32,
+                                decoration: ShapeDecoration(
+                                  shape: RoundedRectangleBorder(
+                                    side: BorderSide(width: 1),
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                ),
+                                child: Stack(
+                                  children: [
+                                    Positioned(
+                                      left: 10.21,
+                                      top: 4,
+                                      child: Container(
+                                        width: 4.34,
+                                        height: 4.34,
+                                        decoration: ShapeDecoration(
+                                          color: Colors.black,
+                                          shape: OvalBorder(),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          width: double.infinity,
+                          height: 80,
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            runAlignment: WrapAlignment.center,
+                            spacing: 2,
+                            runSpacing: 2,
+                            children: [
+                              Container(
+                                width: 39,
+                                height: 32,
+                                decoration: ShapeDecoration(
+                                  shape: RoundedRectangleBorder(
+                                    side: BorderSide(width: 1),
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                ),
+                                child: Stack(),
+                              ),
+                              Container(
+                                width: 39,
+                                height: 32,
+                                decoration: ShapeDecoration(
+                                  shape: RoundedRectangleBorder(
+                                    side: BorderSide(width: 1),
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                ),
+                                child: Stack(
+                                  children: [
+                                    Positioned(
+                                      left: 10.21,
+                                      top: 4,
+                                      child: Container(
+                                        width: 4.34,
+                                        height: 4.34,
+                                        decoration: ShapeDecoration(
+                                          color: Colors.black,
+                                          shape: OvalBorder(),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          width: double.infinity,
+                          height: 80,
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            runAlignment: WrapAlignment.center,
+                            spacing: 2,
+                            runSpacing: 2,
+                            children: [
+                              Container(
+                                width: 39,
+                                height: 32,
+                                decoration: ShapeDecoration(
+                                  shape: RoundedRectangleBorder(
+                                    side: BorderSide(width: 1),
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                ),
+                                child: Stack(
+                                  children: [
+                                    Positioned(
+                                      left: 7.18,
+                                      top: 4,
+                                      child: Container(
+                                        width: 5.65,
+                                        height: 5.65,
+                                        decoration: ShapeDecoration(
+                                          color: Colors.black,
+                                          shape: OvalBorder(),
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      left: 22.10,
+                                      top: 4,
+                                      child: Container(
+                                        width: 5.09,
+                                        height: 5.09,
+                                        decoration: ShapeDecoration(
+                                          color: Colors.black,
+                                          shape: OvalBorder(side: BorderSide(width: 1)),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // === 第三欄：轉乘方向 ===
+                  Container(
+
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 20),
+              
+              // === 底部分隔線 ===
+              ...List.generate(5, (index) => Container(
+                width: 342,
+                height: 1,
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: ShapeDecoration(
+                  shape: RoundedRectangleBorder(
+                    side: BorderSide(
+                      width: 1,
+                      strokeAlign: BorderSide.strokeAlignCenter,
+                      color: const Color(0xFF646466),
+                    ),
+                  ),
+                ),
+              )),
+            ],
           ),
+        ),
       ],
     );
   }
@@ -1984,24 +3390,444 @@ class YouBikeMapPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// 小黃角「M1/M5/M7」徽章
+// === 出口徽章樣式枚舉 ===
+enum ExitBadgeStyle { flag, square }
+
+// === 小黃角「M1/M5/M7」徽章 - 升級版 ===
 class _ExitBadge extends StatelessWidget {
+  const _ExitBadge(
+    this.code, {
+    this.style = ExitBadgeStyle.flag,
+    this.height = 28,        // 旗標版高度
+    this.squareSize = 40,    // 方塊版邊長
+    this.elevation = 3,      // 投影深度（旗標版）
+  });
+
   final String code;
-  const _ExitBadge(this.code);
+  final ExitBadgeStyle style;
+  final double height;
+  final double squareSize;
+  final double elevation;
+
+  static const Color _yellow = Color(0xFFFFD54F);
+  static const Color _blue = Color(0xFF005FBD);
+
+  @override
+  Widget build(BuildContext context) {
+    if (style == ExitBadgeStyle.square) {
+      // === 方塊版：對應 HTML 視覺 ===
+      return SizedBox(
+        width: squareSize,
+        height: squareSize,
+        child: Stack(
+          children: [
+            // 文字靠下置中（對齊 HTML 樣式）
+            Positioned(
+              left: 6,
+              right: 4,
+              top: 5,
+              bottom: 5,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: _OutlinedText(
+                  code,
+                  fontSize: squareSize * 0.5,   // 40px -> 約 20px 字號
+                  fillColor: _blue,
+                  strokeColor: Colors.white,
+                  strokeWidth: 3,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // === 旗標版：小黃角旗 ===
+    final width = height * 1.8; // 視覺上略寬
+    return CustomPaint(
+      painter: _FlagPainter(
+        color: _yellow,
+        elevation: elevation,
+      ),
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: Center(
+          child: _OutlinedText(
+            code,
+            fontSize: height * 0.6,
+            fillColor: _blue,
+            strokeColor: Colors.white,
+            strokeWidth: 3,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// === 白色外框 + 實心字 ===
+class _OutlinedText extends StatelessWidget {
+  const _OutlinedText(
+    this.text, {
+    required this.fontSize,
+    required this.fillColor,
+    required this.strokeColor,
+    required this.strokeWidth,
+    this.fontWeight = FontWeight.w700,
+  });
+
+  final String text;
+  final double fontSize;
+  final Color fillColor;
+  final Color strokeColor;
+  final double strokeWidth;
+  final FontWeight fontWeight;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // 外框描邊
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: fontSize,
+            fontWeight: fontWeight,
+            foreground: Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = strokeWidth
+              ..color = strokeColor,
+          ),
+        ),
+        // 實心文字
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: fontSize,
+            fontWeight: fontWeight,
+            color: fillColor,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// === 畫小黃角旗（左下角缺口）===
+class _FlagPainter extends CustomPainter {
+  _FlagPainter({required this.color, this.elevation = 3});
+  final Color color;
+  final double elevation;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final notch = size.height * 0.3; // 左下角缺口
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(notch, size.height)
+      ..lineTo(0, size.height - notch)
+      ..close();
+
+    // 陰影效果
+    canvas.drawShadow(path, Colors.black.withOpacity(0.4), elevation, true);
+
+    // 旗面
+    final paint = Paint()..color = color;
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FlagPainter oldDelegate) {
+    return oldDelegate.color != color || oldDelegate.elevation != elevation;
+  }
+}
+
+// === 台北車站首末班車時刻表 ===
+class TaipeiMainStationSchedule extends StatelessWidget {
+  const TaipeiMainStationSchedule({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFFFFD54F), // 黃色
-        borderRadius: BorderRadius.circular(4),
+        color: const Color(0xFFF8F9FA), // 淺灰背景色
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: Text(
-        code,
-        style: const TextStyle(
-          color: Color(0xFF114488),
-          fontWeight: FontWeight.w900,
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 標題區塊
+          Container(
+            width: double.infinity,
+            height: 38,
+            decoration: const BoxDecoration(
+              color: Color(0xFFE1F3F8),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(10),
+                topRight: Radius.circular(10),
+              ),
+            ),
+            child: const Center(
+              child: Text(
+                '首末班車時刻',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 16,
+                  fontFamily: 'Noto Sans TC',
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 11),
+          
+          // 標題列
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildHeaderColumn('目的地'),
+                _buildHeaderColumn('首班'),
+                _buildHeaderColumn('末班'),
+                _buildHeaderColumn('時刻表'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 11),
+          
+          // 分隔線
+          Container(
+            width: 342,
+            height: 0.5,
+            color: const Color(0xFF646466),
+          ),
+          const SizedBox(height: 8),
+          
+          // 路線資料
+          _buildScheduleRow(
+            lineColor: const Color(0xFF0070BD), // 藍線
+            lineCode: '01',
+            lineText: 'B',
+            destination: '新店',
+            firstTrain: '06:03',
+            lastTrain: '00:50',
+            timetable: '查看',
+          ),
+          const SizedBox(height: 8),
+          
+          _buildScheduleRow(
+            lineColor: const Color(0xFFE3002C), // 紅線
+            lineCode: '02', 
+            lineText: 'R',
+            destination: '淡水',
+            firstTrain: '06:00',
+            lastTrain: '00:31',
+            timetable: '查看',
+          ),
+          const SizedBox(height: 8),
+          
+          _buildScheduleRow(
+            lineColor: const Color(0xFFE3002C), // 紅線
+            lineCode: '02',
+            lineText: 'R', 
+            destination: '象山',
+            firstTrain: '06:06',
+            lastTrain: '00:45',
+            timetable: '查看',
+          ),
+          const SizedBox(height: 8),
+          
+          _buildScheduleRow(
+            lineColor: const Color(0xFF008659), // 綠線
+            lineCode: '03',
+            lineText: 'G',
+            destination: '松山',
+            firstTrain: '06:03',
+            lastTrain: '00:23',
+            timetable: '查看',
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderColumn(String title) {
+    return Container(
+      width: 54,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.black,
+              fontSize: 14,
+              fontFamily: 'Noto Sans TC',
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Container(
+            width: double.infinity,
+            height: 2,
+            decoration: ShapeDecoration(
+              shape: RoundedRectangleBorder(
+                side: BorderSide(
+                  width: 2,
+                  strokeAlign: BorderSide.strokeAlignCenter,
+                  color: Colors.white.withValues(alpha: 0.10),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScheduleRow({
+    required Color lineColor,
+    required String lineCode,
+    required String lineText,
+    required String destination,
+    required String firstTrain,
+    required String lastTrain,
+    required String timetable,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          // 目的地欄位
+          SizedBox(
+            width: 54,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: ShapeDecoration(
+                    color: lineColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        lineText,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontFamily: 'Noto Sans TC',
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        lineCode,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 6,
+                          fontFamily: 'Noto Sans TC',
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    destination,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 12,
+                      fontFamily: 'Noto Sans TC',
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // 首班時間
+          SizedBox(
+            width: 54,
+            child: Text(
+              firstTrain,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 12,
+                fontFamily: 'Noto Sans TC',
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          
+          // 末班時間
+          SizedBox(
+            width: 54,
+            child: Text(
+              lastTrain,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 12,
+                fontFamily: 'Noto Sans TC',
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          
+          // 時刻表連結
+          SizedBox(
+            width: 54,
+            child: GestureDetector(
+              onTap: () {
+                // 這裡可以添加時刻表查看功能
+                print('查看 $destination 線時刻表');
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF26C6DA),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  timetable,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontFamily: 'Noto Sans TC',
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
