@@ -31,12 +31,6 @@ class _EditFavoriteStationsPageState extends State<EditFavoriteStationsPage> {
       if (_selected.contains(name)) {
         _selected.remove(name);
       } else {
-        if (_selected.length >= 2) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('最多只能選擇 2 個常用站點')));
-          return;
-        }
         _selected.add(name);
       }
     });

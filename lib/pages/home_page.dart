@@ -5,13 +5,16 @@ import 'dart:convert';
 import '../utils/global_login_state.dart';
 import 'customize_functions_page.dart';
 import 'dart:async'; // Added for Timer
-import 'edit_favorite_stations_page.dart'; // Added for EditFavoriteStationsPage
 import 'route_info_page.dart'
     show MetroApiService; // Reuse API service for track info
 import '../utils/stations_data.dart';
 import 'my_account_page.dart';
 import '../main.dart';
 import 'info_page.dart';
+import 'favorites_page.dart';
+import '../utils/behavior_tracker.dart';
+// removed local upload button from home header; upload available in AI Demo
+import 'ai_demo_page.dart';
 
 // 單筆站點到站資訊（本地倒數用）
 class StationArrival {
@@ -67,6 +70,8 @@ class _HomePageState extends State<HomePage> {
   int _currentSecond = 0;
   // 30秒輪詢計時器
   Timer? _pollTimer;
+  // 5分鐘預測計時器
+  Timer? _predictTimer;
   // 是否已載入進站資料（可用於日後顯示loading狀態）
   // ignore: unused_field
   bool _arrivalsLoaded = false;
@@ -76,6 +81,8 @@ class _HomePageState extends State<HomePage> {
   // ignore: unused_field
   int _lastFetchMs = 0;
   bool _isFetching = false;
+  // AI 預測 top2
+  List<String> _predictedTop2 = [];
 
   // 最新消息數據
   List<Map<String, String>> newsItems = [
@@ -99,10 +106,46 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    // Behavior tracking: demo hooks
+    BehaviorTracker().init();
     _loadSelectedFunctions();
     _loadDefaultFunctions();
+    _loadPredictedTop2();
     _startCountdownTimer();
     _startPollingArrivals();
+    _startPredictPolling();
+  }
+
+  Future<void> _loadPredictedTop2() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('predicted_top2');
+      if (raw != null && raw.isNotEmpty) {
+        final Map<String, dynamic> j = jsonDecode(raw);
+        final List<dynamic> arr = (j['stations'] as List?) ?? const [];
+        final List<String> list = arr
+            .map((e) => (e ?? '').toString())
+            .where((s) => s.isNotEmpty)
+            .toList();
+        if (list.isNotEmpty) {
+          setState(() {
+            _predictedTop2 = list.take(2).toList();
+            // 將首頁顯示名單改為預測 top2
+            frequentStations = _predictedTop2
+                .map(
+                  (name) => {
+                    'name': name,
+                    'timeToDirection1': '--:--',
+                    'timeToDirection2': '--:--',
+                    'destination1': '',
+                    'destination2': '',
+                  },
+                )
+                .toList();
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   // 會員資訊橫幅
@@ -194,6 +237,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _timer?.cancel();
     _pollTimer?.cancel();
+    _predictTimer?.cancel();
     super.dispose();
   }
 
@@ -223,6 +267,45 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // 每5分鐘觸發一次預測（目前僅示意：實際呼叫可抽成服務）
+  void _startPredictPolling() {
+    _predictTimer?.cancel();
+    _predictTimer = Timer.periodic(const Duration(minutes: 5), (_) async {
+      try {
+        // 這裡可加入「有移動才預測」的條件（例如比較最近樣本的距離）
+        // 先讀取 SharedPreferences 是否已有預測結果；若需要可在此觸發新的預測
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString('predicted_top2');
+        if (raw != null && raw.isNotEmpty) {
+          final Map<String, dynamic> j = jsonDecode(raw);
+          final List<dynamic> arr = (j['stations'] as List?) ?? const [];
+          final List<String> list = arr
+              .map((e) => (e ?? '').toString())
+              .where((s) => s.isNotEmpty)
+              .toList();
+          if (list.isNotEmpty) {
+            setState(() {
+              _predictedTop2 = list.take(2).toList();
+              frequentStations = _predictedTop2
+                  .map(
+                    (name) => {
+                      'name': name,
+                      'timeToDirection1': '--:--',
+                      'timeToDirection2': '--:--',
+                      'destination1': '',
+                      'destination2': '',
+                    },
+                  )
+                  .toList();
+            });
+            // 立即刷新一次到站資料
+            _fetchArrivals();
+          }
+        }
+      } catch (_) {}
+    });
+  }
+
   // 取得所有站點的最新列車資訊並更新常用站點的兩個方向（含路線與時間基準）
   Future<void> _fetchArrivals() async {
     try {
@@ -249,11 +332,31 @@ class _HomePageState extends State<HomePage> {
               if (baseSeconds == null) return null;
               final nowStr = e['NowDateTime']?.toString() ?? '';
               final baseMs = _parseNowDateTimeMs(nowStr);
-              final lineName = StationsData.lineForDestination(destination);
               final bool isArriving = countDown.contains('進站');
+
+              // 優先以當前站所屬線來推斷此班次的線別，避免板橋誤判成綠線
+              final List<String> stationLines = StationsData.linesForStation(
+                stationName,
+              );
+              String? inferredLine;
+              for (final line in stationLines) {
+                final d = StationsData.whichDirection(line, destination);
+                if (d != null) {
+                  inferredLine = line;
+                  break;
+                }
+              }
+              inferredLine ??= StationsData.lineForDestination(destination);
+              if (inferredLine != null &&
+                  stationLines.isNotEmpty &&
+                  !stationLines.contains(inferredLine)) {
+                // 若與本站線別不符，優先採用本站第一條線作為保守預設
+                inferredLine = stationLines.first;
+              }
+
               return StationArrival(
                 destination: destination,
-                lineName: lineName,
+                lineName: inferredLine,
                 baseSeconds: baseSeconds,
                 baseTimeMs: baseMs,
                 isArriving: isArriving,
@@ -554,7 +657,7 @@ class _HomePageState extends State<HomePage> {
                 const Expanded(
                   child: Center(
                     child: Text(
-                      '台北捷運',
+                      'MetroTogether',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -565,6 +668,24 @@ class _HomePageState extends State<HomePage> {
                 ),
                 Row(
                   children: [
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context)
+                            .push(
+                              MaterialPageRoute(
+                                builder: (_) => const AiDemoPage(),
+                              ),
+                            )
+                            .then((_) async {
+                              await _loadPredictedTop2();
+                              await _fetchArrivals();
+                            });
+                      },
+                      child: const Text(
+                        'AI Demo',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                    ),
                     IconButton(
                       onPressed: () {
                         showDialog(
@@ -661,7 +782,7 @@ class _HomePageState extends State<HomePage> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
-              '常用站點',
+              '預測要去的站點',
               style: TextStyle(
                 color: Color(0xFF114D4D),
                 fontSize: 18,
@@ -685,9 +806,14 @@ class _HomePageState extends State<HomePage> {
                   tooltip: '刷新',
                 ),
                 TextButton(
-                  onPressed: _openEditFavoriteStations,
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const FavoritesPage()),
+                    );
+                  },
                   child: const Text(
-                    '編輯',
+                    '最愛',
                     style: TextStyle(color: Color(0xFF26C6DA)),
                   ),
                 ),
@@ -699,8 +825,29 @@ class _HomePageState extends State<HomePage> {
 
         Column(
           children: [
-            // 前兩個常用站點
-            ...frequentStations.map((station) {
+            // 顯示預測 top2（若無預測，退回目前名單的前兩個）
+            ...List<Map<String, dynamic>>.from(
+              frequentStations.isNotEmpty
+                  ? frequentStations.take(2)
+                  : <Map<String, dynamic>>[
+                      if (favoriteStationNames.isNotEmpty)
+                        {
+                          'name': favoriteStationNames.first,
+                          'timeToDirection1': '--:--',
+                          'timeToDirection2': '--:--',
+                          'destination1': '',
+                          'destination2': '',
+                        },
+                      if (favoriteStationNames.length > 1)
+                        {
+                          'name': favoriteStationNames[1],
+                          'timeToDirection1': '--:--',
+                          'timeToDirection2': '--:--',
+                          'destination1': '',
+                          'destination2': '',
+                        },
+                    ],
+            ).map((station) {
               // 根據站所屬線動態背景（多線時疊加漸層）
               final lines = StationsData.linesForStation(station['name']);
               final List<Color> baseColors = lines
@@ -716,7 +863,9 @@ class _HomePageState extends State<HomePage> {
               }
               final BoxDecoration boxDeco = bgColors.length <= 1
                   ? BoxDecoration(
-                      color: const Color(0xFF22303C),
+                      color: bgColors.isNotEmpty
+                          ? bgColors.first
+                          : const Color(0xFF22303C),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: const Color(0xFF114D4D),
@@ -1018,8 +1167,24 @@ class _HomePageState extends State<HomePage> {
     }
 
     // 站名對應的固定兩線（最多兩線），若資料含更多線依最短到站優先挑兩線
+    // 優先以本站實際所屬線排序，避免板橋（板南/環狀）錯誤優先綠線
+    final stationLines = StationsData.linesForStation(stationName);
     List<String> candidateLines = byLine.keys.toList();
     candidateLines.sort((a, b) {
+      final la = byLine[a]!
+        ..sort((x, y) => x.baseSeconds.compareTo(y.baseSeconds));
+      final lb = byLine[b]!
+        ..sort((x, y) => x.baseSeconds.compareTo(y.baseSeconds));
+      final va = (la.isNotEmpty ? la.first.baseSeconds : 1 << 30);
+      final vb = (lb.isNotEmpty ? lb.first.baseSeconds : 1 << 30);
+      return va.compareTo(vb);
+    });
+    candidateLines.sort((a, b) {
+      final ia = stationLines.indexOf(a);
+      final ib = stationLines.indexOf(b);
+      final pa = ia == -1 ? 1 : 0;
+      final pb = ib == -1 ? 1 : 0;
+      if (pa != pb) return pa.compareTo(pb); // 本站線優先
       final la = byLine[a]!
         ..sort((x, y) => x.baseSeconds.compareTo(y.baseSeconds));
       final lb = byLine[b]!
@@ -1057,10 +1222,20 @@ class _HomePageState extends State<HomePage> {
         chips.add(_buildArrivalChip(text, color));
       } else {
         final dirNames = StationsData.directionsForLine(line);
-        final fallback = dirNames.isNotEmpty && dirNames[0].isNotEmpty
-            ? dirNames[0].first
-            : '—';
-        chips.add(_buildArrivalChip('往 $fallback | 進站中', color));
+        // 若本站是該線在此方向的終點站，則不顯示該方向的佔位
+        final isTerminalForThisDir =
+            dirNames.isNotEmpty &&
+            dirNames[0].any(
+              (n) =>
+                  stationName.replaceAll('站', '').contains(n) ||
+                  n.contains(stationName.replaceAll('站', '')),
+            );
+        if (!isTerminalForThisDir) {
+          final fallback = dirNames.isNotEmpty && dirNames[0].isNotEmpty
+              ? dirNames[0].first
+              : '—';
+          chips.add(_buildArrivalChip('往 $fallback | 進站中', color));
+        }
       }
       chips.add(const SizedBox(height: 8));
       // 方向1
@@ -1074,10 +1249,20 @@ class _HomePageState extends State<HomePage> {
         chips.add(_buildArrivalChip(text, color));
       } else {
         final dirNames = StationsData.directionsForLine(line);
-        final fallback = dirNames.length > 1 && dirNames[1].isNotEmpty
-            ? dirNames[1].first
-            : '—';
-        chips.add(_buildArrivalChip('往 $fallback | 進站中', color));
+        // 若本站是該線在此方向的終點站，則不顯示該方向的佔位
+        final isTerminalForThisDir =
+            dirNames.length > 1 &&
+            dirNames[1].any(
+              (n) =>
+                  stationName.replaceAll('站', '').contains(n) ||
+                  n.contains(stationName.replaceAll('站', '')),
+            );
+        if (!isTerminalForThisDir) {
+          final fallback = dirNames.length > 1 && dirNames[1].isNotEmpty
+              ? dirNames[1].first
+              : '—';
+          chips.add(_buildArrivalChip('往 $fallback | 進站中', color));
+        }
       }
       chips.add(const SizedBox(height: 8));
     }
@@ -1252,22 +1437,5 @@ class _HomePageState extends State<HomePage> {
 
   // 原本的聊天室選擇對話框已改為導向資訊>共乘
 
-  void _openEditFavoriteStations() async {
-    // 頁面需要：目前名單 favoriteStationNames，返回回調更新
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => EditFavoriteStationsPage(
-          initialSelected: favoriteStationNames,
-          onChanged: (list) {
-            favoriteStationNames = list;
-            _saveFavoriteStations();
-            _rebuildFrequentStationsFromNames();
-            // 使用者確認後立即抓取新站點資料
-            _fetchArrivals();
-          },
-        ),
-      ),
-    );
-  }
+  // 編輯常用站點已移至 FavoritesPage
 }

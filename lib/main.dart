@@ -8,6 +8,11 @@ import 'pages/my_account_page.dart';
 import 'utils/version_check_wrapper.dart';
 import 'utils/font_size_manager.dart';
 import 'utils/global_login_state.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'utils/behavior_tracker.dart';
+import 'utils/location_tracking.dart';
+import 'services/behavior_uploader.dart';
+import 'dart:async';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +24,7 @@ void main() async {
     }
   };
 
+  await Hive.initFlutter();
   await Firebase.initializeApp();
 
   // 初始化全局登入狀態
@@ -89,12 +95,14 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold> {
   int _selectedIndex = 2; // 主頁在中間位置
   bool _myAccountAutoOpen = false;
+  DateTime _tabEnterUtc = DateTime.now().toUtc();
+  String _currentScreen = 'Home';
+  final BehaviorTracker _behavior = BehaviorTracker();
+  final LocationTrackingService _tracking = LocationTrackingService();
+  Timer? _dailyUploadTimer;
 
   void selectTab(int index, {bool openAccountDialog = false}) {
-    setState(() {
-      _selectedIndex = index;
-      _myAccountAutoOpen = openAccountDialog && index == 4;
-    });
+    _onTabWillChange(index, openAccountDialog: openAccountDialog);
   }
 
   // 在應用啟動時檢查版本
@@ -104,6 +112,11 @@ class _MainScaffoldState extends State<MainScaffold> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       VersionCheckWrapper.checkVersionOnStartup(context);
     });
+    // 初始化行為追蹤器（Hive 已在 main() 初始化）
+    _behavior.init();
+    // 啟動定位追蹤（供 predict 用）
+    _tracking.init().then((_) => _tracking.startForegroundStream());
+    _scheduleDailyUpload();
   }
 
   @override
@@ -116,16 +129,16 @@ class _MainScaffoldState extends State<MainScaffold> {
       MyAccountPage(autoOpenAccountDialog: _myAccountAutoOpen),
     ];
     return Scaffold(
-      body: pages[_selectedIndex],
+      body: Stack(
+        children: [
+          pages[_selectedIndex],
+          // 移除懸浮 AI Demo，統一改為主頁頂部入口
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-            if (_selectedIndex != 4) {
-              _myAccountAutoOpen = false;
-            }
-          });
+          _onTabWillChange(index);
         },
         type: BottomNavigationBarType.fixed,
         selectedFontSize: 12,
@@ -143,5 +156,63 @@ class _MainScaffoldState extends State<MainScaffold> {
         ],
       ),
     );
+  }
+
+  // 將追蹤邏輯保留為私有成員方法，避免擴充造成 linter 警告
+  void _onTabWillChange(int toIndex, {bool openAccountDialog = false}) {
+    // 1) 結算上一個 tab 的停留時間
+    final now = DateTime.now().toUtc();
+    final duration = now.difference(_tabEnterUtc).inSeconds;
+    _behavior.logScreenView(_currentScreen, durationSec: duration);
+
+    // 2) 切換狀態
+    setState(() {
+      _selectedIndex = toIndex;
+      _myAccountAutoOpen = openAccountDialog && toIndex == 4;
+      _tabEnterUtc = now;
+      _currentScreen = _screenNameForIndex(toIndex);
+    });
+
+    // 3) 進入新 tab 的曝光（duration 先不填，由下次切換時結算）
+    _behavior.logScreenView(_currentScreen);
+  }
+
+  String _screenNameForIndex(int i) {
+    switch (i) {
+      case 0:
+        return 'RouteInfoPage';
+      case 1:
+        return 'InfoPage';
+      case 2:
+        return 'Home';
+      case 3:
+        return 'GoBenefitsPage';
+      case 4:
+        return 'MyAccountPage';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  // 每天 01:00 自動上傳前一日行為資料
+  void _scheduleDailyUpload() {
+    _dailyUploadTimer?.cancel();
+    final now = DateTime.now();
+    DateTime next = DateTime(now.year, now.month, now.day, 1, 0);
+    if (!next.isAfter(now)) {
+      next = next.add(const Duration(days: 1));
+    }
+    final wait = next.difference(now);
+    _dailyUploadTimer = Timer(wait, () async {
+      try {
+        final uid = GlobalLoginState.currentUid ?? 'anonymous';
+        final y = DateTime.now().subtract(const Duration(days: 1));
+        final ymd =
+            '${y.year.toString().padLeft(4, '0')}${y.month.toString().padLeft(2, '0')}${y.day.toString().padLeft(2, '0')}';
+        await BehaviorUploader().flushDay(uid, ymd);
+      } catch (_) {}
+      // 重新排程下一次
+      _scheduleDailyUpload();
+    });
   }
 }
