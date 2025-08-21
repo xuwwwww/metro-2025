@@ -60,6 +60,51 @@
                 android:resource="@xml/arrival_widget_info"/>
         </receiver>
 
+        <!-- Additional widget sizes sharing the same provider (unique subclasses) -->
+        <receiver
+            android:name=".ArrivalWidgetProvider_3x2"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_3x2_info"/>
+        </receiver>
+
+        <receiver
+            android:name=".ArrivalWidgetProvider_5x2"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_5x2_info"/>
+        </receiver>
+
+        <receiver
+            android:name=".ArrivalWidgetProvider_5x3"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_5x3_info"/>
+        </receiver>
+
+        <receiver
+            android:name=".ArrivalWidgetProvider_5x4"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_5x4_info"/>
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

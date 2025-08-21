@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="12dp"
+    android:padding="16dp"
     android:background="#22303C">
 
     <TextView
@@ -12,17 +12,17 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="#FFFFFF"
-        android:textSize="14sp"
+        android:textSize="16sp"
         android:textStyle="bold"
-        android:text="sdfsdfdsfds"/>
+        android:text="最近站點"/>
 
     <TextView
         android:id="@+id/widget_line1"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="#26C6DA"
-        android:textSize="13sp"
-        android:layout_marginTop="6dp"
+        android:textSize="14sp"
+        android:layout_marginTop="8dp"
         android:text="2分30秒 往 A"/>
 
     <TextView
@@ -30,8 +30,18 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textColor="#FFB74D"
-        android:textSize="13sp"
-        android:layout_marginTop="2dp"
+        android:textSize="14sp"
+        android:layout_marginTop="4dp"
         android:text="4分15秒 往 B"/>
+
+    <!-- 區域留給將來顯示更多資訊 -->
+    <TextView
+        android:id="@+id/widget_extra"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp"
+        android:layout_marginTop="6dp"
+        android:text=""/>
 
 </LinearLayout>

@@ -3,6 +3,7 @@ package com.example.metro
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
+import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -15,7 +16,19 @@ class ArrivalWidgetProvider : AppWidgetProvider() {
         appWidgetIds: IntArray
     ) {
         for (appWidgetId in appWidgetIds) {
-            val views = RemoteViews(context.packageName, R.layout.arrival_widget)
+            // Determine initial layout from AppWidget info so we can reuse this provider
+            val info: AppWidgetProviderInfo? = try {
+                appWidgetManager.getAppWidgetInfo(appWidgetId)
+            } catch (e: Exception) {
+                null
+            }
+
+            val layoutRes = when (info?.initialLayout) {
+                // these constants are resource ids generated at build time; compare with R.layout.*
+                else -> R.layout.arrival_widget
+            }
+
+            val views = RemoteViews(context.packageName, layoutRes)
 
             // Read values saved by Flutter (SharedPreferences name is fixed)
             val sp = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
@@ -28,6 +41,14 @@ class ArrivalWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_title, "$station 到站")
             views.setTextViewText(R.id.widget_line1, "$time1  $dir1")
             views.setTextViewText(R.id.widget_line2, "$time2  $dir2")
+
+            // If layout contains widget_extra (for larger widgets), populate it for B feature
+            try {
+                val extra = sp.getString("flutter.arrival_extra", "")
+                views.setTextViewText(R.id.widget_extra, extra)
+            } catch (ignored: Exception) {
+                // small widgets won't have widget_extra id; ignore
+            }
 
             // Tap widget → open app
             val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
