@@ -5,6 +5,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'dart:async';
 import '../utils/stations_data.dart';
 import '../utils/global_login_state.dart';
+import '../utils/metro_chat_client.dart';
 // import 'chat_page.dart'; // 不再跳頁使用
 // import 'info/general_section.dart';
 // import 'info/rideshare_section.dart';
@@ -28,6 +29,8 @@ class _InfoPageState extends State<InfoPage> {
   _InfoSection active = _InfoSection.general;
   String search = '';
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // 自由對話歷史（App 前景期間持續保留；完全關閉後清空）
+  final List<Map<String, String>> _freeChatMsgs = [];
   Set<String> _userPermissions = {};
 
   // 進入資訊頁的轉場
@@ -40,7 +43,15 @@ class _InfoPageState extends State<InfoPage> {
 
   final TextEditingController _chatController = TextEditingController();
   // 一般分頁的共用對話訊息（三個選項共用同一串）
-  final List<Map<String, String>> _generalMsgs = [];
+  // 三個子分頁各自保留歷史
+  final Map<_GeneralSubTab, List<Map<String, String>>> _tabMsgs = {
+    _GeneralSubTab.emergency: <Map<String, String>>[],
+    _GeneralSubTab.lost: <Map<String, String>>[],
+    _GeneralSubTab.support: <Map<String, String>>[],
+  };
+  // 目前顯示的訊息引用
+  List<Map<String, String>> _generalMsgs = [];
+  bool _generalBotTyping = false;
   bool _isOnline = true;
   Timer? _netTimer;
   String? _activeRideRoom;
@@ -58,7 +69,6 @@ class _InfoPageState extends State<InfoPage> {
   int _activeChatIndex = 0;
   final PageController _chatPageController = PageController();
   final TextEditingController _freeChatController = TextEditingController();
-  final List<Map<String, String>> _freeChatMsgs = [];
 
   @override
   void initState() {
@@ -67,7 +77,11 @@ class _InfoPageState extends State<InfoPage> {
     _startTransition();
     _initSpeech();
     // 預設顯示一般客服的問候
-    _generalMsgs.add({'from': '一般客服BOT', 'text': '您好，請問需要什麼協助？'});
+    final support = _tabMsgs[_GeneralSubTab.support]!;
+    if (support.isEmpty) {
+      support.add({'from': '一般客服BOT', 'text': '您好，請問需要什麼協助？'});
+    }
+    _generalMsgs = _tabMsgs[_GeneralSubTab.support]!;
     _startOnlineProbe();
   }
 
@@ -480,13 +494,15 @@ class _InfoPageState extends State<InfoPage> {
                         : idx == 1
                         ? _GeneralSubTab.lost
                         : _GeneralSubTab.support;
-                    // 切換時清空歷史訊息並插入提示
-                    _generalMsgs
-                      ..clear()
-                      ..add({
+                    // 改為保留各分頁各自歷史，若首次進入才放問候
+                    final list = _tabMsgs[_generalTab]!;
+                    if (list.isEmpty) {
+                      list.add({
                         'from': '${_tabLabel(_generalTab)}BOT',
                         'text': _tabGreeting(_generalTab),
                       });
+                    }
+                    _generalMsgs = list;
                   });
                 },
                 children: [
@@ -504,7 +520,14 @@ class _InfoPageState extends State<InfoPage> {
 
   Widget _buildGeneralChatList([bool wrapDecoration = true]) {
     // 顯示聊天訊息區域 + 送出列
-    final List<Map<String, String>> msgs = _generalMsgs;
+    final List<Map<String, String>> msgs = [
+      ..._generalMsgs,
+      if (_generalBotTyping)
+        {
+          'from': '${_tabLabel(_generalTab)}BOT',
+          'text': '…', // typing indicator placeholder
+        },
+    ];
 
     final list = ListView.builder(
       padding: EdgeInsets.only(
@@ -550,12 +573,34 @@ class _InfoPageState extends State<InfoPage> {
                       : const Color(0xFF3A4A5A),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(
-                  m['text'] ?? '',
-                  style: TextStyle(
-                    color: isYou ? Colors.black87 : Colors.white70,
-                  ),
-                ),
+                child: isYou
+                    ? Text(
+                        m['text'] ?? '',
+                        style: const TextStyle(color: Colors.black87),
+                      )
+                    : (m['text'] == '…'
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                SizedBox(
+                                  width: 12,
+                                  height: 12,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  '對方正在輸入…',
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                              ],
+                            )
+                          : Text(
+                              m['text'] ?? '',
+                              style: const TextStyle(color: Colors.white70),
+                            )),
               ),
             ),
             if (isYou) ...[
@@ -720,6 +765,7 @@ class _InfoPageState extends State<InfoPage> {
                             hintStyle: TextStyle(color: Colors.white54),
                             border: InputBorder.none,
                           ),
+                          onSubmitted: (_) => _sendGeneralMessage(),
                         ),
                       ),
                       IconButton(
@@ -769,7 +815,59 @@ class _InfoPageState extends State<InfoPage> {
     setState(() {
       _generalMsgs.add({'from': 'You', 'text': txt});
       _chatController.clear();
+      _generalBotTyping = true;
     });
+    _callGeneralBot(txt);
+  }
+
+  Future<void> _callGeneralBot(String userText) async {
+    try {
+      final List<Map<String, String>> hist = _generalMsgs
+          .map(
+            (m) => {
+              'role': m['from'] == 'You' ? 'user' : 'assistant',
+              'content': m['text'] ?? '',
+            },
+          )
+          .toList();
+      final trimmed = hist.length > 20 ? hist.sublist(hist.length - 20) : hist;
+      // Bedrock 要求會話必須以 user 開頭：過濾掉前綴的 assistant 問候
+      final cleaned = trimmed
+          .skipWhile((m) => m['role'] == 'assistant')
+          .toList();
+      final client = MetroChatClient(
+        endpoint:
+            'https://t6vzlokvqd.execute-api.us-east-1.amazonaws.com/default/metro-customer-service',
+      );
+      final history = cleaned
+          .map((m) => ChatMessage(role: m['role']!, content: m['content']!))
+          .toList();
+      final userId = GlobalLoginState.currentUid;
+      final ChatRole role = switch (_generalTab) {
+        _GeneralSubTab.emergency => ChatRole.emergency,
+        _GeneralSubTab.lost => ChatRole.lostFound,
+        _ => ChatRole.general,
+      };
+      final res = await client.send(
+        message: userText,
+        role: role,
+        history: history,
+        userId: userId,
+      );
+      setState(() {
+        _generalMsgs.add({
+          'from': '${_tabLabel(_generalTab)}BOT',
+          'text': res.reply,
+        });
+        _generalBotTyping = false;
+      });
+      print(
+        '[GeneralChat] role=${res.role} model=${res.model} reply=${res.reply}',
+      );
+    } catch (e) {
+      print('[GeneralChat] error: $e');
+      setState(() => _generalBotTyping = false);
+    }
   }
 
   // 語音輸入（一般）
@@ -798,10 +896,12 @@ class _InfoPageState extends State<InfoPage> {
     if (_generalTab == tab) return;
     setState(() {
       _generalTab = tab;
-      // 切換時清空歷史訊息，重新插入對應提示
-      _generalMsgs
-        ..clear()
-        ..add({'from': '${_tabLabel(tab)}BOT', 'text': _tabGreeting(tab)});
+      // 切換時不清空歷史；若該分頁尚無歷史，插入提示
+      final list = _tabMsgs[tab]!;
+      if (list.isEmpty) {
+        list.add({'from': '${_tabLabel(tab)}BOT', 'text': _tabGreeting(tab)});
+      }
+      _generalMsgs = list;
     });
   }
 
@@ -1273,25 +1373,11 @@ class _InfoPageState extends State<InfoPage> {
                             hintStyle: TextStyle(color: Colors.white54),
                             border: InputBorder.none,
                           ),
-                          onSubmitted: (_) {
-                            final t = _freeChatController.text.trim();
-                            if (t.isEmpty) return;
-                            setState(() {
-                              _freeChatMsgs.add({'from': 'You', 'text': t});
-                              _freeChatController.clear();
-                            });
-                          },
+                          onSubmitted: (_) => _sendFreeChat(),
                         ),
                       ),
                       IconButton(
-                        onPressed: () {
-                          final t = _freeChatController.text.trim();
-                          if (t.isEmpty) return;
-                          setState(() {
-                            _freeChatMsgs.add({'from': 'You', 'text': t});
-                            _freeChatController.clear();
-                          });
-                        },
+                        onPressed: _sendFreeChat,
                         icon: const Icon(Icons.send, color: Colors.white70),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(
@@ -1321,6 +1407,57 @@ class _InfoPageState extends State<InfoPage> {
         ),
       ),
     );
+  }
+
+  // 以 LLM 客服 API 送出訊息，附帶歷史
+  Future<void> _sendFreeChat() async {
+    final t = _freeChatController.text.trim();
+    if (t.isEmpty) return;
+    setState(() {
+      _freeChatMsgs.add({'from': 'You', 'text': t});
+      _freeChatController.clear();
+    });
+    try {
+      // 準備 history（user/assistant 交替）
+      final List<Map<String, String>> hist = _freeChatMsgs
+          .map(
+            (m) => {
+              'role': m['from'] == 'You' ? 'user' : 'assistant',
+              'content': m['text'] ?? '',
+            },
+          )
+          .toList();
+      // 只帶近 20 筆避免過長
+      final trimmed = hist.length > 20 ? hist.sublist(hist.length - 20) : hist;
+
+      // 呼叫 LLM 客服
+      final client = MetroChatClient(
+        endpoint:
+            'https://t6vzlokvqd.execute-api.us-east-1.amazonaws.com/default/metro-customer-service',
+      );
+      final history = trimmed
+          .map((m) => ChatMessage(role: m['role']!, content: m['content']!))
+          .toList();
+      final userId = GlobalLoginState.currentUid;
+      // 依一般分頁子選單決定角色
+      final ChatRole role = switch (_generalTab) {
+        _GeneralSubTab.emergency => ChatRole.emergency,
+        _GeneralSubTab.lost => ChatRole.lostFound,
+        _ => ChatRole.general,
+      };
+      final res = await client.send(
+        message: t,
+        role: role,
+        history: history,
+        userId: userId,
+      );
+      setState(() {
+        _freeChatMsgs.add({'from': 'BOT', 'text': res.reply});
+      });
+      print('[Chat] role=${res.role} model=${res.model} reply=${res.reply}');
+    } catch (e) {
+      print('[Chat] error: $e');
+    }
   }
 
   Future<void> _leaveChatRoom(String lineName) async {
