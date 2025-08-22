@@ -60,6 +60,18 @@
                 android:resource="@xml/widget_5x4_info"/>
         </receiver>
 
+        <!-- 新增 station widget receiver -->
+        <receiver
+            android:name=".StationWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/station_widget_info"/>
+        </receiver>
+
         <!-- Additional widget sizes sharing the same provider (unique subclasses) -->
         <!-- <receiver
             android:name=".ArrivalWidgetProvider_3x2"
@@ -70,7 +82,7 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_3x2_info"/>
-        </receiver>
+        </receiver> 
 
         <receiver
             android:name=".ArrivalWidgetProvider_5x2"
