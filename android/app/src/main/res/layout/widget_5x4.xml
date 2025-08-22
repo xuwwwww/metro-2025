@@ -4,43 +4,372 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp"
-    android:background="#22303C">
+    android:padding="12dp"
+    android:background="#BEE0FF">
 
+    <!-- ===== Header：站名 + 更新提示 ===== -->
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:id="@+id/title_station_a"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="公館站"
+            android:textColor="#000000"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/refresh_hint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:text="x秒後更新"
+            android:textColor="#F52626"
+            android:textSize="10sp" />
+    </RelativeLayout>
+
+    <!-- ===== 公館站：班次 1 ===== -->
+    <LinearLayout
+        android:id="@+id/row_a_1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp">
+
+        <!-- ETA 「膠囊」：用淺色底 + 內距模擬 -->
+        <TextView
+            android:id="@+id/eta_a_1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="20dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:text="00分 30秒"
+            android:textColor="#000000"
+            android:textSize="12sp"
+            android:background="#1AFFFFFF" />
+
+        <!-- 往 + 目的地 + 徽章 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginStart="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="往"
+                android:textSize="12sp"
+                android:textColor="#000000" />
+
+            <TextView
+                android:id="@+id/dest_a_1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="松山"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:textColor="#000000" />
+
+            <!-- 線別徽章 G19 -->
+            <TextView
+                android:id="@+id/badge_a_1"
+                android:layout_width="16dp"
+                android:layout_height="21dp"
+                android:layout_marginStart="6dp"
+                android:gravity="center"
+                android:text="G\n19"
+                android:textColor="#FFFFFF"
+                android:textSize="8sp"
+                android:background="#008659" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ===== 公館站：班次 2 ===== -->
+    <LinearLayout
+        android:id="@+id/row_a_2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="6dp">
+
+        <TextView
+            android:id="@+id/eta_a_2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="20dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:text="01分 25秒"
+            android:textColor="#000000"
+            android:textSize="12sp"
+            android:background="#1AFFFFFF" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginStart="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="往"
+                android:textSize="12sp"
+                android:textColor="#000000" />
+
+            <TextView
+                android:id="@+id/dest_a_2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="新店"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:textColor="#000000" />
+
+            <TextView
+                android:id="@+id/badge_a_2"
+                android:layout_width="16dp"
+                android:layout_height="21dp"
+                android:layout_marginStart="6dp"
+                android:gravity="center"
+                android:text="G\n01"
+                android:textColor="#FFFFFF"
+                android:textSize="8sp"
+                android:background="#008659" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ===== 第二個站點標題 ===== -->
     <TextView
-        android:id="@+id/widget_title"
+        android:id="@+id/title_station_b"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="#FFFFFF"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:text="最近站點"/>
+        android:layout_marginTop="12dp"
+        android:text="台北車站"
+        android:textColor="#000000"
+        android:textSize="16sp" />
 
-    <TextView
-        android:id="@+id/widget_line1"
-        android:layout_width="wrap_content"
+    <!-- ===== 台北車站：班次 1 ===== -->
+    <LinearLayout
+        android:id="@+id/row_b_1"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="#26C6DA"
-        android:textSize="14sp"
-        android:layout_marginTop="8dp"
-        android:text="2分30秒 往 A"/>
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="8dp">
 
-    <TextView
-        android:id="@+id/widget_line2"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textColor="#FFB74D"
-        android:textSize="14sp"
-        android:layout_marginTop="4dp"
-        android:text="4分15秒 往 B"/>
+        <TextView
+            android:id="@+id/eta_b_1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="20dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:text="00分 28秒"
+            android:textColor="#000000"
+            android:textSize="12sp"
+            android:background="#1AFFFFFF" />
 
-    <TextView
-        android:id="@+id/widget_extra"
-        android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginStart="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="往"
+                android:textSize="12sp"
+                android:textColor="#000000" />
+
+            <TextView
+                android:id="@+id/dest_b_1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="淡水"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:textColor="#000000" />
+
+            <TextView
+                android:id="@+id/badge_b_1"
+                android:layout_width="16dp"
+                android:layout_height="21dp"
+                android:layout_marginStart="6dp"
+                android:gravity="center"
+                android:text="R\n28"
+                android:textColor="#FFFFFF"
+                android:textSize="8sp"
+                android:background="#E3002C" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ===== 台北車站：班次 2 ===== -->
+    <LinearLayout
+        android:id="@+id/row_b_2"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="#FFFFFF"
-        android:textSize="13sp"
-        android:layout_marginTop="6dp"
-        android:text="B 功能資訊"/>
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="6dp">
+
+        <TextView
+            android:id="@+id/eta_b_2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="20dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:text="01分 05秒"
+            android:textColor="#000000"
+            android:textSize="12sp"
+            android:background="#1AFFFFFF" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginStart="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="往"
+                android:textSize="12sp"
+                android:textColor="#000000" />
+
+            <TextView
+                android:id="@+id/dest_b_2"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="象山"
+                android:textStyle="bold"
+                android:textSize="12sp"
+                android:textColor="#000000" />
+
+            <TextView
+                android:id="@+id/badge_b_2"
+                android:layout_width="16dp"
+                android:layout_height="21dp"
+                android:layout_marginStart="6dp"
+                android:gravity="center"
+                android:text="R\n02"
+                android:textColor="#FFFFFF"
+                android:textSize="8sp"
+                android:background="#E3002C" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- ===== 台北車站：班次 3（雙徽章） ===== -->
+    <RelativeLayout
+        android:id="@+id/row_b_3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/eta_b_3"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="20dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:text="03分 30秒"
+                android:textColor="#000000"
+                android:textSize="12sp"
+                android:background="#1AFFFFFF" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginStart="10dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="往"
+                    android:textSize="12sp"
+                    android:textColor="#000000" />
+
+                <TextView
+                    android:id="@+id/dest_b_3"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="南港\n展覽館"
+                    android:textStyle="bold"
+                    android:textSize="12sp"
+                    android:textColor="#000000" />
+
+                <!-- 兩個徽章：BL23 + BR24 -->
+                <TextView
+                    android:id="@+id/badge_b_3_bl"
+                    android:layout_width="16dp"
+                    android:layout_height="21dp"
+                    android:layout_marginStart="6dp"
+                    android:gravity="center"
+                    android:text="BL\n23"
+                    android:textColor="#FFFFFF"
+                    android:textSize="8sp"
+                    android:background="#0070BD" />
+
+                <TextView
+                    android:id="@+id/badge_b_3_br"
+                    android:layout_width="16dp"
+                    android:layout_height="21dp"
+                    android:layout_marginStart="4dp"
+                    android:gravity="center"
+                    android:text="BR\n24"
+                    android:textColor="#FFFFFF"
+                    android:textSize="8sp"
+                    android:background="#C48C31" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 分頁箭頭（置右） -->
+        <TextView
+            android:id="@+id/page_next"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:text="›"
+            android:textStyle="bold"
+            android:textSize="20sp"
+            android:textColor="#000000" />
+    </RelativeLayout>
 
 </LinearLayout>
