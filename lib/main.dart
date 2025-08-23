@@ -13,6 +13,7 @@ import 'utils/behavior_tracker.dart';
 import 'utils/location_tracking.dart';
 import 'services/behavior_uploader.dart';
 import 'dart:async';
+import 'services/station_prediction_scheduler.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -100,6 +101,7 @@ class _MainScaffoldState extends State<MainScaffold> {
   final BehaviorTracker _behavior = BehaviorTracker();
   final LocationTrackingService _tracking = LocationTrackingService();
   Timer? _dailyUploadTimer;
+  StationPredictionScheduler? _scheduler;
 
   void selectTab(int index, {bool openAccountDialog = false}) {
     _onTabWillChange(index, openAccountDialog: openAccountDialog);
@@ -116,6 +118,9 @@ class _MainScaffoldState extends State<MainScaffold> {
     _behavior.init();
     // 啟動定位追蹤（供 predict 用）
     _tracking.init().then((_) => _tracking.startForegroundStream());
+    // 啟動站點預測排程（每5分鐘；移動時輪詢，停止時做最後一次）
+    _scheduler = StationPredictionScheduler();
+    _scheduler!.start();
     _scheduleDailyUpload();
   }
 

@@ -237,7 +237,7 @@ class _InfoPageState extends State<InfoPage> {
                   children: [
                     _topCircleTab('一般', _InfoSection.general, Icons.circle),
                     _topCircleTab('共乘', _InfoSection.rideshare, Icons.circle),
-                    _topCircleTab('開聊', _InfoSection.chat, Icons.circle),
+                    _topCircleTab('閒聊', _InfoSection.chat, Icons.circle),
                     _topCircleTab('音樂', _InfoSection.music, Icons.circle),
                     _addTab(),
                   ],
