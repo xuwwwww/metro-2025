@@ -9,6 +9,8 @@ import 'route_info_page.dart'
     show MetroApiService; // Reuse API service for track info
 import '../utils/stations_data.dart';
 import 'my_account_page.dart';
+import '../utils/locale_manager.dart';
+import '../utils/app_localizations.dart';
 import '../main.dart';
 import 'info_page.dart';
 import 'favorites_page.dart';
@@ -681,9 +683,12 @@ class _HomePageState extends State<HomePage> {
                               await _fetchArrivals();
                             });
                       },
-                      child: const Text(
-                        'AI Demo',
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      child: Text(
+                        AppLocalizations.of(context).t('ai_demo'),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                     IconButton(
@@ -692,33 +697,63 @@ class _HomePageState extends State<HomePage> {
                           context: context,
                           builder: (ctx) => AlertDialog(
                             backgroundColor: const Color(0xFF22303C),
-                            title: const Text(
-                              '語言設定',
-                              style: TextStyle(color: Colors.white),
+                            title: Text(
+                              AppLocalizations.of(
+                                context,
+                              ).t('language_settings'),
+                              style: const TextStyle(color: Colors.white),
                             ),
                             content: Column(
                               mainAxisSize: MainAxisSize.min,
-                              children: const [
+                              children: [
                                 ListTile(
-                                  title: Text(
+                                  title: const Text(
                                     '中文',
                                     style: TextStyle(color: Colors.white),
                                   ),
+                                  onTap: () {
+                                    LocaleManager.setLocale(const Locale('zh'));
+                                    Navigator.pop(ctx);
+                                  },
                                 ),
                                 ListTile(
-                                  title: Text(
+                                  title: const Text(
                                     'English',
                                     style: TextStyle(color: Colors.white),
                                   ),
+                                  onTap: () {
+                                    LocaleManager.setLocale(const Locale('en'));
+                                    Navigator.pop(ctx);
+                                  },
+                                ),
+                                ListTile(
+                                  title: const Text(
+                                    '日本語',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                  onTap: () {
+                                    LocaleManager.setLocale(const Locale('ja'));
+                                    Navigator.pop(ctx);
+                                  },
+                                ),
+                                ListTile(
+                                  title: const Text(
+                                    '한국어',
+                                    style: TextStyle(color: Colors.white),
+                                  ),
+                                  onTap: () {
+                                    LocaleManager.setLocale(const Locale('ko'));
+                                    Navigator.pop(ctx);
+                                  },
                                 ),
                               ],
                             ),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(ctx),
-                                child: const Text(
-                                  '關閉',
-                                  style: TextStyle(color: Colors.white70),
+                                child: Text(
+                                  AppLocalizations.of(context).t('close'),
+                                  style: const TextStyle(color: Colors.white70),
                                 ),
                               ),
                             ],

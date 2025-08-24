@@ -83,7 +83,7 @@ class AdaptiveTitle extends StatelessWidget {
     return AdaptiveText(
       text,
       fontSizeMultiplier: 1.75, // 標題字體大小
-      color: color ?? const Color(0xFF26C6DA),
+      color: color ?? Theme.of(context).colorScheme.primary,
       fontWeight: FontWeight.bold,
       textAlign: textAlign,
     );
@@ -103,7 +103,7 @@ class AdaptiveSubtitle extends StatelessWidget {
     return AdaptiveText(
       text,
       fontSizeMultiplier: 1.25, // 副標題字體大小
-      color: color ?? Colors.grey[400],
+      color: color ?? Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
       fontWeight: FontWeight.w500,
       textAlign: textAlign,
     );
@@ -132,7 +132,7 @@ class AdaptiveBodyText extends StatelessWidget {
     return AdaptiveText(
       text,
       fontSizeMultiplier: 1.0, // 正文字體大小
-      color: color ?? Colors.white,
+      color: color ?? Theme.of(context).colorScheme.onSurface,
       textAlign: textAlign,
       maxLines: maxLines,
       overflow: overflow,
@@ -153,7 +153,7 @@ class AdaptiveSmallText extends StatelessWidget {
     return AdaptiveText(
       text,
       fontSizeMultiplier: 0.875, // 小字體大小
-      color: color ?? Colors.grey[400],
+      color: color ?? Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
       textAlign: textAlign,
     );
   }

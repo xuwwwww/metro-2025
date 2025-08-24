@@ -2,6 +2,8 @@
     <!-- internet -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- microphone for speech to text -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     

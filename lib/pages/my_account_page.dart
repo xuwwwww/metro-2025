@@ -5,6 +5,9 @@ import '../utils/version_checker.dart';
 import '../utils/font_size_manager.dart';
 import '../utils/global_login_state.dart';
 import '../widgets/adaptive_text.dart';
+import '../utils/notification_prefs.dart';
+import '../services/station_arrival_notifier.dart';
+import '../utils/theme_manager.dart';
 
 class MyAccountPage extends StatefulWidget {
   final bool autoOpenAccountDialog;
@@ -25,7 +28,7 @@ class _MyAccountPageState extends State<MyAccountPage> {
 
   // App 設定
   bool _notificationsEnabled = true;
-  bool _darkModeEnabled = true;
+  // dark mode state is driven by ThemeManager.mode
   double _fontSize = FontSizeManager.defaultFontSize;
 
   // 聊天室列表與選擇
@@ -71,6 +74,9 @@ class _MyAccountPageState extends State<MyAccountPage> {
     });
     // 添加字體大小變更監聽器
     FontSizeManager.addListener(_onFontSizeChanged);
+    // 初始化通知切換
+    _notificationsEnabled = await NotificationPrefs.isEnabled();
+    // 主題開關狀態由 ThemeManager 提供
   }
 
   // 字體大小變更回調
@@ -421,19 +427,35 @@ class _MyAccountPageState extends State<MyAccountPage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SwitchListTile(
-              title: const Text('推播通知', style: TextStyle(color: Colors.white)),
-              subtitle: const Text(
-                '開啟或關閉推播通知',
-                style: TextStyle(color: Colors.grey),
-              ),
-              value: _notificationsEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _notificationsEnabled = value;
-                });
+            StatefulBuilder(
+              builder: (context, setInnerState) {
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: SwitchListTile(
+                    key: ValueKey<bool>(_notificationsEnabled),
+                    title: const Text(
+                      '推播通知',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      '開啟或關閉預測站點到站倒數通知',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    value: _notificationsEnabled,
+                    onChanged: (value) async {
+                      setInnerState(() => _notificationsEnabled = value);
+                      setState(() {});
+                      await NotificationPrefs.setEnabled(value);
+                      if (value) {
+                        await StationArrivalNotifier.instance.start();
+                      } else {
+                        await StationArrivalNotifier.instance.stop();
+                      }
+                    },
+                    activeColor: const Color(0xFF26C6DA),
+                  ),
+                );
               },
-              activeColor: const Color(0xFF26C6DA),
             ),
           ],
         ),
@@ -461,19 +483,33 @@ class _MyAccountPageState extends State<MyAccountPage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SwitchListTile(
-              title: const Text('深色模式', style: TextStyle(color: Colors.white)),
-              subtitle: const Text(
-                '使用深色主題',
-                style: TextStyle(color: Colors.grey),
-              ),
-              value: _darkModeEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _darkModeEnabled = value;
-                });
+            StatefulBuilder(
+              builder: (context, setInnerState) {
+                final bool isDark = ThemeManager.mode == ThemeMode.dark;
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: SwitchListTile(
+                    key: ValueKey<bool>(isDark),
+                    title: const Text(
+                      '深色模式',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    subtitle: const Text(
+                      '切換淺色/深色主題',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    value: isDark,
+                    onChanged: (value) async {
+                      await ThemeManager.setMode(
+                        value ? ThemeMode.dark : ThemeMode.light,
+                      );
+                      if (mounted) setInnerState(() {});
+                      if (mounted) setState(() {});
+                    },
+                    activeColor: const Color(0xFF26C6DA),
+                  ),
+                );
               },
-              activeColor: const Color(0xFF26C6DA),
             ),
           ],
         ),

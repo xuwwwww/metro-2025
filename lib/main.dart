@@ -14,6 +14,12 @@ import 'utils/location_tracking.dart';
 import 'services/behavior_uploader.dart';
 import 'dart:async';
 import 'services/station_prediction_scheduler.dart';
+import 'utils/theme_manager.dart';
+import 'services/station_arrival_notifier.dart';
+import 'utils/notification_prefs.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'utils/locale_manager.dart';
+import 'utils/app_localizations.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,51 +40,141 @@ void main() async {
   // 初始化字體大小管理器
   await FontSizeManager.initialize();
 
+  // 主題模式
+  await ThemeManager.initialize();
+  // 語系
+  await LocaleManager.initialize();
+
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Metro App',
-      theme: ThemeData(
-        colorScheme:
-            ColorScheme.fromSeed(
-              brightness: Brightness.dark,
-              seedColor: const Color(0xFF114D4D),
-            ).copyWith(
-              primary: const Color(0xFF114D4D),
-              onPrimary: Colors.white,
-              secondary: const Color(0xFF0A2E36),
-              onSecondary: Colors.white,
-              error: Colors.red.shade400,
-              onError: Colors.white,
-              background: const Color(0xFF1A2327),
-              surface: const Color(0xFF22303C),
-              onSurface: Colors.white,
-            ),
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFF1A2327),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF114D4D),
-          foregroundColor: Colors.white,
-          elevation: 0,
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFF22303C),
-          selectedItemColor: Color(0xFF26C6DA),
-          unselectedItemColor: Color(0xFF607D8B),
-          showUnselectedLabels: true,
-        ),
-        textTheme: const TextTheme(
-          bodyLarge: TextStyle(color: Colors.white),
-          bodyMedium: TextStyle(color: Colors.white70),
-        ),
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    FontSizeManager.addListener((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  ThemeData _buildDarkTheme() {
+    return ThemeData(
+      colorScheme:
+          ColorScheme.fromSeed(
+            brightness: Brightness.dark,
+            seedColor: const Color(0xFF114D4D),
+          ).copyWith(
+            primary: const Color(0xFF114D4D),
+            onPrimary: Colors.white,
+            secondary: const Color(0xFF0A2E36),
+            onSecondary: Colors.white,
+            error: Colors.red.shade400,
+            onError: Colors.white,
+            background: const Color(0xFF1A2327),
+            surface: const Color(0xFF22303C),
+            onSurface: Colors.white,
+          ),
+      useMaterial3: true,
+      scaffoldBackgroundColor: const Color(0xFF1A2327),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF114D4D),
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
-      home: MainScaffold(key: MainScaffold.globalKey),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: Color(0xFF22303C),
+        selectedItemColor: Color(0xFF26C6DA),
+        unselectedItemColor: Color(0xFF607D8B),
+        showUnselectedLabels: true,
+      ),
+      textTheme: const TextTheme(
+        bodyLarge: TextStyle(color: Colors.white),
+        bodyMedium: TextStyle(color: Colors.white70),
+      ),
+    );
+  }
+
+  ThemeData _buildLightTheme() {
+    return ThemeData(
+      colorScheme:
+          ColorScheme.fromSeed(
+            brightness: Brightness.light,
+            seedColor: const Color(0xFF114D4D),
+          ).copyWith(
+            primary: const Color(0xFF114D4D),
+            onPrimary: Colors.white,
+            secondary: const Color(0xFF0A2E36),
+            onSecondary: Colors.white,
+            error: Colors.red.shade400,
+            onError: Colors.white,
+            background: const Color(0xFFF5F7F9),
+            surface: Colors.white,
+            onSurface: Colors.black87,
+          ),
+      useMaterial3: true,
+      scaffoldBackgroundColor: const Color(0xFFF5F7F9),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF114D4D),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: Colors.white,
+        selectedItemColor: Color(0xFF114D4D),
+        unselectedItemColor: Colors.black54,
+        showUnselectedLabels: true,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double scale =
+        FontSizeManager.fontSize / FontSizeManager.defaultFontSize;
+
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeManager.notifier,
+      builder: (context, mode, _) {
+        return ValueListenableBuilder<Locale?>(
+          valueListenable: LocaleManager.notifier,
+          builder: (context, appLocale, __) {
+            return MaterialApp(
+              title: 'Metro App',
+              theme: _buildLightTheme(),
+              darkTheme: _buildDarkTheme(),
+              themeMode: mode,
+              locale: appLocale,
+              supportedLocales: const [
+                Locale('zh'),
+                Locale('en'),
+                Locale('ja'),
+                Locale('ko'),
+              ],
+              localizationsDelegates: [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              builder: (context, child) {
+                final media = MediaQuery.of(context);
+                return MediaQuery(
+                  data: media.copyWith(textScaleFactor: scale.clamp(0.5, 2.0)),
+                  child: child ?? const SizedBox.shrink(),
+                );
+              },
+              home: MainScaffold(key: MainScaffold.globalKey),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -121,6 +217,12 @@ class _MainScaffoldState extends State<MainScaffold> {
     // 啟動站點預測排程（每5分鐘；移動時輪詢，停止時做最後一次）
     _scheduler = StationPredictionScheduler();
     _scheduler!.start();
+    // 啟動到站倒數通知（若使用者啟用）
+    NotificationPrefs.isEnabled().then((enabled) {
+      if (enabled) {
+        StationArrivalNotifier.instance.start();
+      }
+    });
     _scheduleDailyUpload();
   }
 
